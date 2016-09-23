@@ -1150,6 +1150,7 @@ static int lp_match (lua_State *L) {
   Capture capture[INITCAPSIZE];
   const char *r;
   size_t l;
+  int limit;
   Pattern *p = (getpatt(L, 1, NULL), getpattern(L, 1));
   Instruction *code = (p->code != NULL) ? p->code : prepcompile(L, p, 1);
   const char *s = luaL_checklstring(L, SUBJIDX, &l);
@@ -1158,10 +1159,11 @@ static int lp_match (lua_State *L) {
   lua_pushnil(L);  /* initialize subscache */
   lua_pushlightuserdata(L, capture);  /* initialize caplistidx */
   lua_getuservalue(L, 1);  /* initialize penvidx */
-  r = match(L, s, s + i, s + l, code, capture, ptop);
+  r = match(L, s, s + i, s + l, code, capture, ptop, &limit);
   if (r == NULL) {
     lua_pushnil(L);
-    return 1;
+    lua_pushinteger(L, limit);			    /* 1-based index of last char examined */
+    return 2;
   }
   return getcaptures(L, s, r, ptop);
 }

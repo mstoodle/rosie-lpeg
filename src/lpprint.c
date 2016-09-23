@@ -125,7 +125,7 @@ void printpatt (Instruction *p, int n) {
 #if defined(LPEG_DEBUG)
 static void printcap (Capture *cap) {
   printcapkind(cap->kind);
-  printf(" (idx: %d - size: %d) -> %p\n", cap->idx, cap->siz, cap->s);
+  printf(" (idx: %d - size: %d) -> %p\n", cap->idx, cap->siz, (const void *)cap->s);
 }
 
 

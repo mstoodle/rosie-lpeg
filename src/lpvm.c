@@ -141,11 +141,13 @@ static int removedyncap (lua_State *L, Capture *capture,
 }
 
 
+#define advance(pos) do { if (s > lim) { lim=s; }; } while (0)
+
 /*
 ** Opcode interpreter
 */
 const char *match (lua_State *L, const char *o, const char *s, const char *e,
-                   Instruction *op, Capture *capture, int ptop) {
+                   Instruction *op, Capture *capture, int ptop, int *limit) {
   Stack stackbase[INITBACK];
   Stack *stacklimit = stackbase + INITBACK;
   Stack *stack = stackbase;  /* point to first empty slot in stack */
@@ -153,6 +155,7 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
   int captop = 0;  /* point to first empty slot in captures */
   int ndyncap = 0;  /* number of dynamic captures (in Lua stack) */
   const Instruction *p = op;  /* current instruction */
+  const char *lim = s;	      /* furthest limit of input read */
   stack->p = &giveup; stack->s = s; stack->caplevel = 0; stack++;
   lua_pushlightuserdata(L, stackbase);
   for (;;) {
@@ -172,7 +175,8 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
       }
       case IGiveup: {
         assert(stack == getstackbase(L, ptop));
-        return NULL;
+	*limit = lim - s + 1;			    /* 1-based index of last char examined */
+	return NULL;
       }
       case IRet: {
         assert(stack > getstackbase(L, ptop) && (stack - 1)->s == NULL);
@@ -180,7 +184,7 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
         continue;
       }
       case IAny: {
-        if (s < e) { p++; s++; }
+        if (s < e) { p++; s++; advance(lim); }
         else goto fail;
         continue;
       }
@@ -190,7 +194,7 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
         continue;
       }
       case IChar: {
-        if ((byte)*s == p->i.aux && s < e) { p++; s++; }
+        if ((byte)*s == p->i.aux && s < e) { p++; s++; advance(lim); }
         else goto fail;
         continue;
       }
@@ -202,7 +206,7 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
       case ISet: {
         int c = (byte)*s;
         if (testchar((p+1)->buff, c) && s < e)
-          { p += CHARSETINSTSIZE; s++; }
+          { p += CHARSETINSTSIZE; s++; advance(lim); }
         else goto fail;
         continue;
       }
@@ -225,6 +229,7 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
           if (!testchar((p+1)->buff, c)) break;
         }
         p += CHARSETINSTSIZE;
+	advance(lim);
         continue;
       }
       case IJmp: {
