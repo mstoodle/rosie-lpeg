@@ -153,6 +153,21 @@ static int removedyncap (lua_State *L, Capture *capture,
 }
 
 
+/* NEXT STEP:
+ * Need to save the stack and return it on failure.
+ *
+ * From the stack, the instruction pointer, and the position in the input, we 
+ * can reconstruct where we were in the pattern when the failure occurred. The
+ * capture structure would be a nice bonus, if we can interpret it (in it's 
+ * partially completed state).
+ *
+ * Once we can interpret the stack in such a way that we can construct a useful
+ * parse error message, we can try other approaches as well, such as re-trying
+ * the match while "pretending" that the failure test actually succeeded -- i.e.
+ * if that character hadn't caused the failure, what would have happened?
+ * 
+ */
+
 #include <stdlib.h>				    /* calloc */
 #define stash() do { \
     if (s >= limitpos) { \
