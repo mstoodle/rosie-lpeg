@@ -1143,8 +1143,22 @@ static size_t initposition (lua_State *L, size_t len) {
 }
 
 
+/* Interesting note that we are NOT using the "argument capture" feature, and this is the only one that looks at FIXEDARGS.  Relevant? */
+
 /*
-** Main match function
+* Main match function
+*
+* Stack has, on entry here:
+* 1  Pattern
+* 2  Subject (string)
+* 3  Initial position (int)
+*
+* lp_match pushes these: N.B. ptop is initialized here, pointing at item 3 above
+* ptop+1 nil "initialize subscache"???
+* ptop+2 caplistidx
+* ptop+3 ktableidx ("penvidx"???)
+* ptop+4 stackidx
+* Call match ----------------------------------
 */
 static int lp_match (lua_State *L) {
   Capture capture[INITCAPSIZE];
@@ -1161,9 +1175,16 @@ static int lp_match (lua_State *L) {
   lua_getuservalue(L, 1);  /* initialize penvidx */
   r = match(L, s, s + i, s + l, code, capture, ptop, &limit);
   if (r == NULL) {
-    lua_pushnil(L);
-    lua_pushinteger(L, limit);			    /* 1-based index of last char examined */
-    return 2;
+    /* Capture *cap_from_stack = (Capture *)lua_touserdata(L, caplistidx(ptop));
+       if (cap_from_stack==capture) printf("FOUND capture on stack\n");
+       else printf("!!!! DID NOT FIND capture on stack !!!!\n"); */
+    Capture *current_capture = (Capture *)lua_touserdata(L, caplistidx(ptop));
+    printcaplist(current_capture, NULL);    /* DEBUG */
+    int n = getcaptures(L, s, r, ptop);
+    printf("In match failure, captured %d items.\n", n);
+    lua_pushnil(L);	       /* return nil to indicate "no match" */
+    lua_pushinteger(L, limit); /* 1-based index of last char examined */
+    return 2+n;
   }
   return getcaptures(L, s, r, ptop);
 }

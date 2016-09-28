@@ -123,16 +123,26 @@ void printpatt (Instruction *p, int n) {
 
 
 #if defined(LPEG_DEBUG)
-static void printcap (Capture *cap) {
+void printcap (Capture *cap) {
   printcapkind(cap->kind);
   printf(" (idx: %d - size: %d) -> %p\n", cap->idx, cap->siz, (const void *)cap->s);
+  if (cap->siz > 1) {
+       printf("        value as string: |");
+       for (int i=0; i<(cap->siz -1); i++) {
+	    printf("%c", (const char) *(cap->s+i));
+       }
+       printf("|\n");
+  }
 }
 
 
 void printcaplist (Capture *cap, Capture *limit) {
   printf(">======\n");
-  for (; cap->s && (limit == NULL || cap < limit); cap++)
-    printcap(cap);
+  int i=0;
+  for (; cap->s && (limit == NULL || cap < limit); cap++) {
+       printf("%d: ", i++);
+       printcap(cap);
+  }
   printf("=======\n");
 }
 #endif

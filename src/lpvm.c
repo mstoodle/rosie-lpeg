@@ -45,6 +45,18 @@ typedef struct Stack {
 
 
 /*
+** Make a new capture list (for exploring new ideas and debugging)
+*/
+static Capture *new_cap (lua_State *L, Capture *cap, int capsize, int ptop) {
+  Capture *newc;
+  newc = (Capture *)lua_newuserdata(L, capsize * sizeof(Capture));
+  memcpy(newc, cap, capsize * sizeof(Capture));
+  lua_replace(L, caplistidx(ptop));
+  return newc;
+}
+
+
+/*
 ** Double the size of the array of captures
 */
 static Capture *doublecap (lua_State *L, Capture *cap, int captop, int ptop) {
@@ -141,7 +153,17 @@ static int removedyncap (lua_State *L, Capture *capture,
 }
 
 
-#define advance(pos) do { if (s > lim) { lim=s; }; } while (0)
+#include <stdlib.h>				    /* calloc */
+#define stash() do { \
+    if (s >= limitpos) { \
+      limitpos = s; \
+      saved_inst_ptr = p; \
+      saved_stack_ptr = stack; \
+      saved_ndyncap = ndyncap; \
+      saved_captop = captop; 		    /* TODO: free(saved_capture) */ \
+      saved_capture = capture; \
+      capture = new_cap(L, capture, capsize, ptop);	\
+    }; } while (0)
 
 /*
 ** Opcode interpreter
@@ -155,7 +177,12 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
   int captop = 0;  /* point to first empty slot in captures */
   int ndyncap = 0;  /* number of dynamic captures (in Lua stack) */
   const Instruction *p = op;  /* current instruction */
-  const char *lim = s;	      /* furthest limit of input read */
+  const char *limitpos = s;	      /* furthest limit of input read */
+  int saved_captop = 0;		      /* saved when furthest limit changes */
+  int saved_ndyncap = 0;	      /* saved when furthest limit changes */
+  const Instruction *saved_inst_ptr = NULL;
+  Stack *saved_stack_ptr = NULL;
+  Capture *saved_capture = NULL;
   stack->p = &giveup; stack->s = s; stack->caplevel = 0; stack++;
   lua_pushlightuserdata(L, stackbase);
   for (;;) {
@@ -174,8 +201,34 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
         return s;
       }
       case IGiveup: {
-        assert(stack == getstackbase(L, ptop));
-	*limit = lim - s + 1;			    /* 1-based index of last char examined */
+        assert(stack == getstackbase(L, ptop));	    /* hitting bottom of stack --> give up */
+	/* Here's what we want to do, I think:
+	   When we went the farthest into the input and saved the lim position, there may
+	   have been captures. Later, when we give up, we have popped the stack down to the
+	   bottom, where stack->caplevel=0, and thus we have lost the captures.
+	   So whenever we save lim, we should save caplevel also.  Just before we return the
+	   match failure, we restore captop to the saved caplevel, thus restoring the
+	   captures.
+	   NOTE: Do we need to save the entire captures structure, not just captop?  Hmmm.
+	   NOTE: Not sure what to do about dynamic captures yet.  That will come later.
+	*/
+
+	ndyncap = saved_ndyncap;
+	stack = saved_stack_ptr;
+	capture = saved_capture;		  
+	lua_pushlightuserdata(L, capture);  /* restore caplistidx */
+	lua_replace(L, caplistidx(ptop));
+	captop = saved_captop;		  /* restore from saved value */
+        capture[captop].kind = Cclose;	  /* close the capture list because we will use it */
+        capture[captop].s = NULL;
+	*limit = limitpos - s + 1;	  /* 1-based index of last char examined */
+
+	printf("--------------------------------- About to return NULL from match ---------------------------------\n");
+	printf("o: |%s|\n", o);
+	printf("length of o: %ld\n", (e - o));
+	printf("s (1-based): %ld  stck:%ld, dyncaps:%d, caps:%d \n", /* DEBUG */
+	       (s - o + 1), stack - getstackbase(L, ptop), ndyncap, captop);
+
 	return NULL;
       }
       case IRet: {
@@ -184,7 +237,7 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
         continue;
       }
       case IAny: {
-        if (s < e) { p++; s++; advance(lim); }
+        if (s < e) { stash(); p++; s++; }
         else goto fail;
         continue;
       }
@@ -194,7 +247,7 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
         continue;
       }
       case IChar: {
-        if ((byte)*s == p->i.aux && s < e) { p++; s++; advance(lim); }
+        if ((byte)*s == p->i.aux && s < e) { stash(); p++; s++; }
         else goto fail;
         continue;
       }
@@ -206,7 +259,7 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
       case ISet: {
         int c = (byte)*s;
         if (testchar((p+1)->buff, c) && s < e)
-          { p += CHARSETINSTSIZE; s++; advance(lim); }
+          { stash(); p += CHARSETINSTSIZE; s++; }
         else goto fail;
         continue;
       }
@@ -228,8 +281,8 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
           int c = (byte)*s;
           if (!testchar((p+1)->buff, c)) break;
         }
+	stash();
         p += CHARSETINSTSIZE;
-	advance(lim);
         continue;
       }
       case IJmp: {
