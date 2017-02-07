@@ -1,8 +1,13 @@
 LIBNAME = lpeg
 LUADIR = ../lua/
 
+ifdef LPEG_DEBUG
+COPT = -DLPEG_DEBUG -g
+FILES = lpvm.o lpcap.o lptree.o lpcode.o lpprint.o
+else
 COPT = -O2
-#COPT = -DLPEG_DEBUG -g
+FILES = lpvm.o lpcap.o lptree.o lpcode.o
+endif
 
 CWARNS = -Wall -Wextra -pedantic \
 	-Waggregate-return \
@@ -22,10 +27,11 @@ CWARNS = -Wall -Wextra -pedantic \
 # -Wunreachable-code \
 
 
-CFLAGS = $(CWARNS) $(COPT) -std=c99 -I$(LUADIR) -fPIC
+CFLAGS = $(CWARNS) $(COPT) -std=c99 -I$(LUADIR)/include -fPIC
 CC = gcc
 
-FILES = lpvm.o lpcap.o lptree.o lpcode.o lpprint.o
+default:
+	@echo "Please specify a platform to build for.  Choices are: linux, macosx"
 
 # For Linux
 linux:
@@ -44,7 +50,7 @@ test: test.lua re.lua lpeg.so
 	./test.lua
 
 clean:
-	rm -f $(FILES) lpeg.so
+	rm -f $(FILES) lpprint.o lpeg.so
 
 
 lpcap.o: lpcap.c lpcap.h lptypes.h
