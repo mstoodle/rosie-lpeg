@@ -454,6 +454,7 @@ void realloccode (lua_State *L, Pattern *p, int nsize) {
     luaL_error(L, "not enough memory");
   p->code = (Instruction *)newblock;
   p->codesize = nsize;
+  p->compiledEntry = NULL;
 }
 
 
