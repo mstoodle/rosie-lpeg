@@ -51,9 +51,19 @@ typedef union Instruction {
 
 
 void printpatt (Instruction *p, int n);
-const char *match (lua_State *L, const char *o, const char *s, const char *e,
-                   Instruction *op, Capture *capture, int ptop);
 
+const char *match (lua_State *L, const char *o, const char *s, const char *e,
+                   Instruction *op, Capture *capture, int ptop, int ncode);
+
+struct Pattern;
+const char *compileAndMatch (lua_State *L, const char *o, const char *s, const char *e,
+                   struct Pattern *pattern, Instruction *op, Capture *capture, int ptop, int ncode);
+
+const char *matchWithCompiledPattern (lua_State *L, const char *o, const char *s, const char *e,
+                                      struct Pattern *pattern, Instruction *op, Capture *capture, int ptop, int ncode);
+
+void compilePattern (struct Pattern *pattern, Instruction *op, int ncode);
+void cleanup(void);
 
 #endif
 

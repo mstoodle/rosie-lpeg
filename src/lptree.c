@@ -368,7 +368,7 @@ static TTree *newtree (lua_State *L, int len) {
   lua_pushvalue(L, -1);
   lua_setuservalue(L, -3);
   lua_setmetatable(L, -2);
-  p->code = NULL;  p->codesize = 0; p->compiledEntry = 0;
+  p->code = NULL;  p->codesize = 0; p->compiledEntry = NULL;
   return p->tree;
 }
 
@@ -1198,21 +1198,36 @@ static size_t initposition (lua_State *L, size_t len, int idx) {
 
 
 /*
-** Main match function
+** Entry point to compile pattern and return (does not call match
 */
-static int lp_match (lua_State *L) {
+static int lp_compile(lua_State *L) {
+  Pattern *p = (getpatt(L, 1, NULL), getpattern(L, 1));
+  Instruction *code = (p->code != NULL) ? p->code : prepcompile(L, p, 1);
+  int codesize = p->codesize;
+  compilePattern(p, code, codesize);
+  return 0;
+}
+
+/*
+** match function that will try to JIT compile pattern first if compileFirst is non-zero
+** otherwise it will just try to match (using any available JIT compiled pattern)
+*/
+static int lp_match_internal (lua_State *L, int compileFirst) {
   Capture capture[INITCAPSIZE];
   const char *r;
   size_t l;
   Pattern *p = (getpatt(L, 1, NULL), getpattern(L, 1));
   Instruction *code = (p->code != NULL) ? p->code : prepcompile(L, p, 1);
+  int codesize = p->codesize;
   const char *s = luaL_checklstring(L, SUBJIDX, &l);
   size_t i = initposition(L, l, SUBJIDX+1);
   int ptop = lua_gettop(L);
   lua_pushnil(L);  /* initialize subscache */
   lua_pushlightuserdata(L, capture);  /* initialize caplistidx */
   lua_getuservalue(L, 1);  /* initialize penvidx */
-  r = match(L, s, s + i, s + l, code, capture, ptop);
+  if (compileFirst)
+    compilePattern(p, code, codesize);
+  r = matchWithCompiledPattern(L, s, s + i, s + l, p, code, capture, ptop, codesize);
   if (r == NULL) {
     lua_pushnil(L);
     return 1;
@@ -1225,6 +1240,21 @@ static int lp_match (lua_State *L) {
  * encoding types: debug (-1), byte array (0), json (1), input (2)
  * RESTRICTION: only a limited set of capture types are supported
 */
+
+/*
+** Entry point to compile a pattern and then match
+*/
+static int lp_compileAndMatch(lua_State *L) {
+  return lp_match_internal(L, 1);
+}
+
+/*
+** Main match function
+** Does not JIT compile pattern first but will use previously JIT compiled entry point if present
+*/
+static int lp_match(lua_State *L) {
+  return lp_match_internal(L, 0);
+}
 
 /* inline? */
 static int do_r_match (lua_State *L, int from_lua) {
@@ -1308,6 +1338,10 @@ int r_match_C (lua_State *L) {
   return do_r_match(L, 0);
 }
 
+static void lp_cleanup() {
+  cleanup();
+}
+
 /*
 ** {======================================================
 ** Library creation and functions not related to matching
@@ -1385,6 +1419,9 @@ static struct luaL_Reg pattreg[] = {
   {"ptree", lp_printtree},
   {"pcode", lp_printcode},
   {"match", lp_match},
+  {"compileAndMatch", lp_compileAndMatch},
+  {"compile", lp_compile},
+  {"cleanup", lp_cleanup},
   {"B", lp_behind},
   {"V", lp_V},
   {"C", lp_simplecapture},

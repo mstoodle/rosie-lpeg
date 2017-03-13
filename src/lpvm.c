@@ -5,6 +5,8 @@
 
 #include <limits.h>
 #include <string.h>
+#include <stdio.h>
+#include <time.h>
 
 
 #include "lua.h"
@@ -15,12 +17,13 @@
 #include "lpvm.h"
 #include "lpprint.h"
 
+//#define MEASURE
+//#define DEBUG
 
 /* initial size for call/backtrack stack */
 #if !defined(INITBACK)
 #define INITBACK	MAXBACK
 #endif
-
 
 #define getoffset(p)	(((p) + 1)->offset)
 
@@ -47,7 +50,7 @@ typedef struct Stack {
 /*
 ** Double the size of the array of captures
 */
-static Capture *doublecap (lua_State *L, Capture *cap, int captop, int ptop) {
+Capture *doublecap (lua_State *L, Capture *cap, int captop, int ptop) {
   Capture *newc;
   if (captop >= INT_MAX/((int)sizeof(Capture) * 2))
     luaL_error(L, "too many captures");
@@ -61,7 +64,7 @@ static Capture *doublecap (lua_State *L, Capture *cap, int captop, int ptop) {
 /*
 ** Double the size of the stack
 */
-static Stack *doublestack (lua_State *L, Stack **stacklimit, int ptop) {
+Stack *doublestack (lua_State *L, Stack **stacklimit, int ptop) {
   Stack *stack = getstackbase(L, ptop);
   Stack *newstack;
   int n = *stacklimit - stack;  /* current stack size */
@@ -88,7 +91,7 @@ static Stack *doublestack (lua_State *L, Stack **stacklimit, int ptop) {
 ** is the result; 'curr' is current subject position; 'limit'
 ** is subject's size.
 */
-static int resdyncaptures (lua_State *L, int fr, int curr, int limit) {
+int resdyncaptures (lua_State *L, int fr, int curr, int limit) {
   lua_Integer res;
   if (!lua_toboolean(L, fr)) {  /* false value? */
     lua_settop(L, fr - 1);  /* remove results */
@@ -111,7 +114,7 @@ static int resdyncaptures (lua_State *L, int fr, int curr, int limit) {
 ** 'base', nested inside a group capture. 'fd' indexes the first capture
 ** value, 'n' is the number of values (at least 1).
 */
-static void adddyncaptures (const char *s, Capture *base, int n, int fd) {
+void adddyncaptures (const char *s, Capture *base, int n, int fd) {
   int i;
   /* Cgroup capture is already there */
   assert(base[0].kind == Cgroup && base[0].siz == 0);
@@ -131,7 +134,7 @@ static void adddyncaptures (const char *s, Capture *base, int n, int fd) {
 /*
 ** Remove dynamic captures from the Lua stack (called in case of failure)
 */
-static int removedyncap (lua_State *L, Capture *capture,
+int removedyncap (lua_State *L, Capture *capture,
                          int level, int last) {
   int id = finddyncap(capture + level, capture + last);  /* index of 1st cap. */
   int top = lua_gettop(L);
@@ -141,7 +144,6 @@ static int removedyncap (lua_State *L, Capture *capture,
 }
 
 
-
 /* 
   Mark reports: 98% of bytecodes executed in the Rosie syslog pattern are these (in order): 
     TestSet, Any, PartialCommit
@@ -149,11 +151,118 @@ static int removedyncap (lua_State *L, Capture *capture,
   range test is faster.  New lpeg opcode and compiler optimization?
 */
 
+/* Support for JIT compilation and profiling */
+
+/* compileMatcher is the entry point to the JIT compiler */
+extern int32_t compileMatcher(Pattern *p, Instruction *op, int ncode, uint8_t **entry);
+
+/* These two variables are used as a weak heuristic for reusing compiled code
+** but should not really be needed if compiled entry point stored in some object
+** associated with pattern.
+*/
+static Instruction *lastOp = NULL;
+
+/*
+** JIT compile pattern if possible, but do not try to match
+*/
+void compilePattern (struct Pattern *pattern, Instruction *op, int ncode) {
+  #if defined(DEBUG)
+    printf("pattern %p ncode %d\n", pattern, ncode);
+  #endif
+  uint8_t *entry=NULL;
+  if (ncode < 3000) { // arbitrary threshold for now
+    int32_t rc = compileMatcher(pattern, op, ncode, &entry);
+    if (rc != 0)
+      entry = NULL;
+  }
+
+  pattern->compiledEntry = entry;
+}
+
+static double cumulativeInterpretedMatchTime = 0.0;
+static double cumulativeTimeToMatch = 0.0;
+static int numMeasuredMatches = 0;
+
+/*
+** Match pattern using compiled entry point if available, otherwise interpret
+*/
+const char *matchWithCompiledPattern (lua_State *L, const char *o, const char *s, const char *e,
+                                      struct Pattern *pattern, Instruction *op, Capture *capture, int ptop, int ncode) {
+  struct timespec before, after;
+  char * r;
+
+  int rcBefore, rcAfter;
+
+  {
+    if (pattern->compiledEntry != NULL) {
+      lastOp = op;
+      typedef const char * (MatcherFunction)(lua_State *, const char *, const char *, const char *,
+                                             Capture *, int , int);
+      MatcherFunction *matcher = (MatcherFunction *) pattern->compiledEntry;
+      #if defined(DEBUG)
+        printf("Calling compiled entry for pattern %p\n", pattern);
+      #endif
+
+      rcBefore = clock_gettime(CLOCK_REALTIME, &before);
+      r = matcher(L, o, s, e, capture, ptop, ncode);
+      rcAfter = clock_gettime(CLOCK_REALTIME, &after);
+
+    } else {
+      #if defined(DEBUG)
+        printf("Interpreting (ncode %d)...\n", ncode);
+      #endif
+
+      /* if there isn't a compiled body, then interpret */
+      rcBefore = clock_gettime(CLOCK_REALTIME, &before);
+      r =  match(L, o, s, e, op, capture, ptop, ncode);
+      rcAfter = clock_gettime(CLOCK_REALTIME, &after);
+
+    }
+  }
+
+  if (rcBefore == -1 || rcAfter == -1) {
+    #if defined(MEASURE)
+      printf("Could not measure time to match\n");
+    #endif
+  } else {
+    double timeToMatch = (after.tv_sec - before.tv_sec) + (double)(after.tv_nsec - before.tv_nsec)/1000000000.0;
+    cumulativeTimeToMatch += timeToMatch;
+    numMeasuredMatches++;
+  }
+
+  return r;
+}
+
+void cleanup(void) {
+#if defined(MEASURE)
+  fprintf(stderr,"Measured %d matches\n", numMeasuredMatches);
+  if (cumulativeTimeToMatch > 1)
+    fprintf(stderr,"Total match time is %l6.3f seconds\n", cumulativeTimeToMatch);
+  else
+    fprintf(stderr,"Total match time is %l3.0f milliseconds\n", cumulativeTimeToMatch * 1000.0);
+
+  if (cumulativeInterpretedMatchTime > 1)
+    fprintf(stderr,"Total interpreted match time is %l6.3f seconds\n", cumulativeInterpretedMatchTime);
+  else
+    fprintf(stderr,"Total interpreted match time is %l3.0f milliseconds\n", cumulativeInterpretedMatchTime * 1000.0);
+#endif
+  shutdownJit();
+}
+
+/*
+** JIT if possible, else use standard opcode interpreter
+*/
+const char *compileAndMatch (lua_State *L, const char *o, const char *s, const char *e,
+                             struct Pattern *pattern, Instruction *op, Capture *capture, int ptop, int ncode) {
+  compilePattern(pattern, op, ncode);
+  return matchWithCompiledPattern(L, o, s, e, pattern, op, capture, ptop, ncode);
+}
+
 /*
 ** Opcode interpreter
 */
 const char *match (lua_State *L, const char *o, const char *s, const char *e,
-                   Instruction *op, Capture *capture, int ptop) {
+                   Instruction *op, Capture *capture, int ptop, int ncode) {
   Stack stackbase[INITBACK];
   Stack *stacklimit = stackbase + INITBACK;
   Stack *stack = stackbase;  /* point to first empty slot in stack */
@@ -161,8 +270,13 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
   int captop = 0;  /* point to first empty slot in captures */
   int ndyncap = 0;  /* number of dynamic captures (in Lua stack) */
   const Instruction *p = op;  /* current instruction */
-  stack->p = &giveup; stack->s = s; stack->caplevel = 0; stack++;
+
+  struct timespec before, after;
+  int rcBefore = clock_gettime(CLOCK_REALTIME, &before);
+
   lua_pushlightuserdata(L, stackbase);
+
+  stack->p = &giveup; stack->s = s; stack->caplevel = 0; stack++;
   for (;;) {
 #if defined(DEBUG)
       printf("s: |%s| stck:%d, dyncaps:%d, caps:%d  ",
@@ -171,6 +285,7 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
       printcaplist(capture, capture + captop);
       fflush();
 #endif
+
     assert(stackidx(ptop) + ndyncap == lua_gettop(L) && ndyncap <= captop);
     switch ((Opcode)p->i.code) {
       case IEnd: {
@@ -178,6 +293,13 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
 	/* this Cclose capture is a sentinel to mark the end of the linked caplist */
         capture[captop].kind = Cclose;
         capture[captop].s = NULL;
+
+        int rcAfter = clock_gettime(CLOCK_REALTIME, &after);
+        if (rcBefore != -1 && rcAfter != -1) {
+          double timeToMatch = (after.tv_sec - before.tv_sec) + (double)(after.tv_nsec - before.tv_nsec)/1000000000.0;
+          cumulativeInterpretedMatchTime += timeToMatch;
+        }
+
         return s;
       }
       case IGiveup: {
@@ -364,6 +486,41 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
       default: assert(0); return NULL;
     }
   }
+}
+
+
+
+/* used by lpjit.cpp: most of the guts of ICloseRuntime */
+/* could be reused by match(), but cost of call may impact performance, so only use this copy for JIT to preserve baseline */
+Capture *
+helperCloseRuntime(lua_State *L, const char *o, const char *s, const char *e, Capture *capture, int captop, int capsize, int ndyncap, int ptop, int *results) {
+  CapState cs;
+  int rem, res, n;
+  int fr = lua_gettop(L) + 1; /* stack index of first result */
+  cs.s = o; cs.L = L; cs.ocap = capture; cs.ptop = ptop;
+  n = runtimecap(&cs, capture + captop, s, &rem);  /* call function */
+  captop -= n;  /* remove nested captures */
+  fr -= rem;  /* 'rem' items were popped from Lua stack */
+  res = resdyncaptures(L, fr, s - o, e - o);  /* get result */
+  if (res != -1) { /* not fail? */
+    s = o + res;  /* update current position */
+    n = lua_gettop(L) - fr + 1; /* number of new captures */
+    ndyncap += n - rem;  /* update number of dynamic captures */
+    if (n > 0) {  /* any new capture? */
+      if ((captop += n + 2) >= capsize) {
+        capture = doublecap(L, capture, captop, ptop);
+        capsize = 2 * captop;
+      }
+      /* add new captures to 'capture' list */
+      adddyncaptures(s, capture + captop - n - 2, n, fr); 
+    }
+  }
+  results[0] = res;
+  results[1] = ndyncap;
+  results[2] = captop;
+  results[3] = capsize;
+  
+  return capture;
 }
 
 /* }====================================================== */
