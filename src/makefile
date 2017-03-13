@@ -1,5 +1,7 @@
 LIBNAME = lpeg
 LUADIR = ../lua/
+ROOTDIR = ../../
+OMRDIR = $(ROOTDIR)/omr
 
 ifdef LPEG_DEBUG
 COPT = -DLPEG_DEBUG -g
@@ -37,6 +39,7 @@ CC = gcc
 
 default:
 	@echo "Please specify a platform to build for.  Choices are: linux, macosx"
+	@echo "Install omr using omr_macosx or omr_linux"
 
 # For Linux
 linux:
@@ -65,3 +68,12 @@ lptree.o: lptree.c lptypes.h lpcap.h lpcode.h lptree.h lpvm.h lpprint.h
 lpvm.o: lpvm.c lpcap.h lptypes.h lpvm.h lpprint.h lptree.h
 rbuf.o: rbuf.c rbuf.h
 
+omr_macosx:
+	cd $(ROOTDIR) && git clone https://github.com/eclipse/omr && \
+	cd omr && make -f run_configure.mk SPEC=osx OMRGLUE=./example/glue && \
+	cd jitbuilder && make
+
+omr_linux:
+	cd $(ROOTDIR) && git clone https://github.com/eclipse/omr && \
+	cd omr && make -f run_configure.mk SPEC=linux_x86-64 OMRGLUE=./example/glue && \
+	cd jitbuilder && make
