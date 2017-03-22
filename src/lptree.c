@@ -1167,7 +1167,7 @@ static int lp_match (lua_State *L) {
   return getcaptures(L, s, r, ptop);
 }
 
-/* for rmatch, the 3rd arg (start position) is REQUIRED */
+/* for r_match, the 3rd arg (start position) is REQUIRED */
 static size_t r_initposition (lua_State *L, size_t len);
 static size_t r_initposition (lua_State *L, size_t len) {
      lua_Integer ii = luaL_checkinteger(L, 3);
@@ -1183,12 +1183,12 @@ static size_t r_initposition (lua_State *L, size_t len) {
   }
 }
 
-/* for rmatch, the 4th, 5th args (accumulated times) are REQUIRED */
+/* for r_match, the 4th, 5th args (accumulated times) are REQUIRED */
 
 /*
 ** Rosie match function
 */
-static int lp_rmatch (lua_State *L) {
+static int r_match (lua_State *L) {
   Capture capture[INITCAPSIZE];
   int n;
   lua_Integer t0, tfin, duration0, duration1;
@@ -1227,6 +1227,60 @@ static int lp_rmatch (lua_State *L) {
   return n+2;
 }
 
+/* arg: name <string>
+   arg: pos <int>
+   arg: capture <string>
+   args: subs <tables>
+ */
+int r_create_match(lua_State *L);
+int r_create_match(lua_State *L) {
+  int i, nargs;
+  lua_Integer pos;
+  size_t name_l, captext_l;
+  const char *name, *captext;
+  nargs = lua_gettop(L);
+  name = luaL_checklstring(L, 1, &name_l);
+  printf("*** Got name: %s\n", name);
+  pos = luaL_checkinteger(L, 2);
+  printf("    Got pos: %lld\n", pos);
+  captext = luaL_checklstring(L, 3, &captext_l);
+  printf("    Got captext: %s\n", captext);
+  /* process submatches */
+  nargs = nargs-3;
+  printf("    There are %d subs\n", nargs);
+
+  if (nargs > 0) {
+       lua_createtable(L, nargs, 0); /* create subs table */
+       lua_insert(L, 1);	     /* move subs table to bottom */
+       /* fill the subs table (lua_seti pops the value as well) */
+       for (i=1; i<=nargs; i++) lua_seti(L, 1, (lua_Integer) i); 
+       /* subs table now at top (below are captext, pos, name) */
+  }
+
+  lua_createtable(L, 0, 1);	    /* create match table */
+  lua_pushlstring(L, name, name_l); /* push match name */
+
+  lua_createtable(L, 0, 3);	    /* create match body table */
+  lua_pushliteral(L, "pos");
+  lua_pushinteger(L, pos);
+  lua_settable(L, -3);		    /* body["pos"] = pos */
+  lua_pushliteral(L, "text");
+  lua_pushlstring(L, captext, captext_l);
+  lua_settable(L, -3);		    /* body["text"] = captext */
+
+  /* stack top is body table (next: name, match table, maybe subs table, captext, pos, name) */
+  if (nargs > 0) {
+       lua_pushliteral(L, "subs");
+       lua_pushvalue(L, 1);	/* push copy of subs table */
+       lua_settable(L, -3);	/* body["subs"] = subs table */
+  }
+  
+  /* stack top is body table. (next: name, match table, maybe subs table, captext, pos, name) */
+  lua_settable(L, -3);		    /* match[name] = body */
+
+  /* all items below the return values will be discarded automatically */
+  return 1;
+}
 
 /*
 ** {======================================================
@@ -1325,7 +1379,8 @@ static struct luaL_Reg pattreg[] = {
   {"setmaxstack", lp_setmax},
   {"type", lp_type},
   /* Rosie-specific functions below */
-  {"rmatch", lp_rmatch},
+  {"r_match", r_match},
+  {"r_create_match", r_create_match},
   {NULL, NULL}
 };
 
