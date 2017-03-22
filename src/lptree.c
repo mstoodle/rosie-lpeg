@@ -1252,8 +1252,8 @@ int r_create_match(lua_State *L) {
   if (nargs > 0) {
        lua_createtable(L, nargs, 0); /* create subs table */
        lua_insert(L, 1);	     /* move subs table to bottom */
-       /* fill the subs table (lua_seti pops the value as well) */
-       for (i=1; i<=nargs; i++) lua_seti(L, 1, (lua_Integer) i); 
+       /* fill the subs table (lua_rawseti pops the value as well) */
+       for (i=1; i<=nargs; i++) lua_rawseti(L, 1, (lua_Integer) i); 
        /* subs table now at top (below are captext, pos, name) */
   }
 
@@ -1263,20 +1263,20 @@ int r_create_match(lua_State *L) {
   lua_createtable(L, 0, 3);	    /* create match body table */
   lua_pushliteral(L, "pos");
   lua_pushinteger(L, pos);
-  lua_settable(L, -3);		    /* body["pos"] = pos */
+  lua_rawset(L, -3);		    /* body["pos"] = pos */
   lua_pushliteral(L, "text");
   lua_pushlstring(L, captext, captext_l);
-  lua_settable(L, -3);		    /* body["text"] = captext */
+  lua_rawset(L, -3);		    /* body["text"] = captext */
 
   /* stack top is body table (next: name, match table, maybe subs table, captext, pos, name) */
   if (nargs > 0) {
        lua_pushliteral(L, "subs");
        lua_pushvalue(L, 1);	/* push copy of subs table */
-       lua_settable(L, -3);	/* body["subs"] = subs table */
+       lua_rawset(L, -3);	/* body["subs"] = subs table */
   }
   
   /* stack top is body table. (next: name, match table, maybe subs table, captext, pos, name) */
-  lua_settable(L, -3);		    /* match[name] = body */
+  lua_rawset(L, -3);		    /* match[name] = body */
 
   /* all items below the return values will be discarded automatically */
   return 1;

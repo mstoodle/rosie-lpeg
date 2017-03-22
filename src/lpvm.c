@@ -144,7 +144,9 @@ static int removedyncap (lua_State *L, Capture *capture,
 
 /* 
   Mark reports: 98% of bytecodes executed in the Rosie syslog pattern are these (in order): 
-  TestSet, Any, PartialCommit
+    TestSet, Any, PartialCommit
+  Also from Mark: His code looks for char sets that can be replaced with a range, because the
+  range test is faster.  New lpeg opcode and compiler optimization?
 */
 
 /*
