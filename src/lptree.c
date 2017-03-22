@@ -1183,12 +1183,7 @@ static size_t r_initposition (lua_State *L, size_t len) {
   }
 }
 
-/* for rmatch, the 4th arg (accumulated time) is REQUIRED */
-static lua_Integer r_initduration (lua_State *L);
-static lua_Integer r_initduration (lua_State *L) {
-     lua_Integer t = luaL_checkinteger(L, 4);
-     return t;
-}
+/* for rmatch, the 4th, 5th args (accumulated times) are REQUIRED */
 
 /*
 ** Rosie match function
@@ -1196,7 +1191,7 @@ static lua_Integer r_initduration (lua_State *L) {
 static int lp_rmatch (lua_State *L) {
   Capture capture[INITCAPSIZE];
   int n;
-  lua_Integer t0, duration;
+  lua_Integer t0, tfin, duration0, duration1;
   const char *r;
   size_t l;
   Pattern *p;
@@ -1209,7 +1204,8 @@ static int lp_rmatch (lua_State *L) {
   code = (p->code != NULL) ? p->code : prepcompile(L, p, 1);
   s = luaL_checklstring(L, SUBJIDX, &l);
   i = r_initposition(L, l);
-  duration = r_initduration(L);
+  duration0 = luaL_checkinteger(L, 4); /* matching only */
+  duration1 = luaL_checkinteger(L, 5); /* processing captures only */
   ptop = lua_gettop(L);
   lua_pushnil(L);  /* initialize subscache */
   lua_pushlightuserdata(L, capture);  /* initialize caplistidx */
@@ -1217,14 +1213,18 @@ static int lp_rmatch (lua_State *L) {
   r = match(L, s, s + i, s + l, code, capture, ptop);
   if (r == NULL) {
     lua_pushnil(L);
-    lua_pushinteger(L, l);				     /* leftover value is len */
-    lua_pushinteger(L, ((lua_Integer) clock())-t0+duration); /* make this a macro? */
-    return 3;
+    lua_pushinteger(L, l);	/* leftover value is len */
+    tfin = (lua_Integer) clock();
+    lua_pushinteger(L, tfin-t0+duration0); /* new matching duration */
+    lua_pushinteger(L, duration1); /* no captures, so no change */
+    return 4;
   }
+  tfin = (lua_Integer) clock();
   n = getcaptures(L, s, r, ptop);
-  /* lua_pushinteger(L, ??); leftover value*/
-  lua_pushinteger(L, ((lua_Integer) clock())-t0+duration); /* make this a macro? */
-  return n+1;
+  /* lua_pushinteger(L, ??); leftover value so that we can eliminate the Cp() added in pattern.tlpeg */
+  lua_pushinteger(L, tfin-t0+duration0); /* new matching duration */
+  lua_pushinteger(L, ((lua_Integer) clock())-tfin+duration1); /* new capture processing duration */
+  return n+2;
 }
 
 
