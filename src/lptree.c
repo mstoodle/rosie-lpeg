@@ -7,6 +7,7 @@
 #include <limits.h>
 #include <string.h>
 
+#include <time.h>
 
 #include "lua.h"
 #include "lauxlib.h"
@@ -1166,6 +1167,65 @@ static int lp_match (lua_State *L) {
   return getcaptures(L, s, r, ptop);
 }
 
+/* for rmatch, the 3rd arg (start position) is REQUIRED */
+static size_t r_initposition (lua_State *L, size_t len);
+static size_t r_initposition (lua_State *L, size_t len) {
+     lua_Integer ii = luaL_checkinteger(L, 3);
+  if (ii > 0) {  /* positive index? */
+    if ((size_t)ii <= len)  /* inside the string? */
+      return (size_t)ii - 1;  /* return it (corrected to 0-base) */
+    else return len;  /* crop at the end */
+  }
+  else {  /* negative index */
+    if ((size_t)(-ii) <= len)  /* inside the string? */
+      return len - ((size_t)(-ii));  /* return position from the end */
+    else return 0;  /* crop at the beginning */
+  }
+}
+
+/* for rmatch, the 4th arg (accumulated time) is REQUIRED */
+static lua_Integer r_initduration (lua_State *L);
+static lua_Integer r_initduration (lua_State *L) {
+     lua_Integer t = luaL_checkinteger(L, 4);
+     return t;
+}
+
+/*
+** Rosie match function
+*/
+static int lp_rmatch (lua_State *L) {
+  Capture capture[INITCAPSIZE];
+  int n;
+  lua_Integer t0, duration;
+  const char *r;
+  size_t l;
+  Pattern *p;
+  Instruction *code;
+  const char *s;
+  size_t i;
+  int ptop;
+  t0 = (lua_Integer) clock();
+  p = (getpatt(L, 1, NULL), getpattern(L, 1));
+  code = (p->code != NULL) ? p->code : prepcompile(L, p, 1);
+  s = luaL_checklstring(L, SUBJIDX, &l);
+  i = r_initposition(L, l);
+  duration = r_initduration(L);
+  ptop = lua_gettop(L);
+  lua_pushnil(L);  /* initialize subscache */
+  lua_pushlightuserdata(L, capture);  /* initialize caplistidx */
+  lua_getuservalue(L, 1);  /* initialize penvidx */
+  r = match(L, s, s + i, s + l, code, capture, ptop);
+  if (r == NULL) {
+    lua_pushnil(L);
+    lua_pushinteger(L, l);				     /* leftover value is len */
+    lua_pushinteger(L, ((lua_Integer) clock())-t0+duration); /* make this a macro? */
+    return 3;
+  }
+  n = getcaptures(L, s, r, ptop);
+  /* lua_pushinteger(L, ??); leftover value*/
+  lua_pushinteger(L, ((lua_Integer) clock())-t0+duration); /* make this a macro? */
+  return n+1;
+}
 
 
 /*
@@ -1264,6 +1324,8 @@ static struct luaL_Reg pattreg[] = {
   {"version", lp_version},
   {"setmaxstack", lp_setmax},
   {"type", lp_type},
+  /* Rosie-specific functions below */
+  {"rmatch", lp_rmatch},
   {NULL, NULL}
 };
 
