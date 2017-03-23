@@ -1240,20 +1240,16 @@ int r_create_match(lua_State *L) {
   const char *name, *captext;
   nargs = lua_gettop(L);
   name = luaL_checklstring(L, 1, &name_l);
-  printf("*** Got name: %s\n", name);
   pos = luaL_checkinteger(L, 2);
-  printf("    Got pos: %lld\n", pos);
   captext = luaL_checklstring(L, 3, &captext_l);
-  printf("    Got captext: %s\n", captext);
   /* process submatches */
   nargs = nargs-3;
-  printf("    There are %d subs\n", nargs);
 
   if (nargs > 0) {
        lua_createtable(L, nargs, 0); /* create subs table */
        lua_insert(L, 1);	     /* move subs table to bottom */
        /* fill the subs table (lua_rawseti pops the value as well) */
-       for (i=1; i<=nargs; i++) lua_rawseti(L, 1, (lua_Integer) i); 
+       for (i=nargs; i>=1; i--) lua_rawseti(L, 1, (lua_Integer) i); 
        /* subs table now at top (below are captext, pos, name) */
   }
 
