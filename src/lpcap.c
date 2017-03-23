@@ -23,6 +23,56 @@
 #define pushluaval(cs)		getfromktable(cs, (cs)->cap->idx)
 
 
+/* arg: name <string>
+   arg: pos <int>
+   arg: capture <string>
+   args: subs <tables>
+ */
+int r_create_match(lua_State *L) {
+  int i, nargs;
+  lua_Integer pos;
+  size_t name_l, captext_l;
+  const char *name, *captext;
+  nargs = lua_gettop(L);
+  name = luaL_checklstring(L, 1, &name_l);
+  pos = luaL_checkinteger(L, 2);
+  captext = luaL_checklstring(L, 3, &captext_l);
+  /* process submatches */
+  nargs = nargs-3;
+
+  if (nargs > 0) {
+       lua_createtable(L, nargs, 0); /* create subs table */
+       lua_insert(L, 1);	     /* move subs table to bottom */
+       /* fill the subs table (lua_rawseti pops the value as well) */
+       for (i=nargs; i>=1; i--) lua_rawseti(L, 1, (lua_Integer) i); 
+       /* subs table now at top (below are captext, pos, name) */
+  }
+
+  lua_createtable(L, 0, 1);	    /* create match table */
+  lua_pushlstring(L, name, name_l); /* push match name */
+
+  lua_createtable(L, 0, 3);	    /* create match body table */
+  lua_pushliteral(L, "pos");
+  lua_pushinteger(L, pos);
+  lua_rawset(L, -3);		    /* body["pos"] = pos */
+  lua_pushliteral(L, "text");
+  lua_pushlstring(L, captext, captext_l);
+  lua_rawset(L, -3);		    /* body["text"] = captext */
+
+  /* stack top is body table (next: name, match table, maybe subs table, captext, pos, name) */
+  if (nargs > 0) {
+       lua_pushliteral(L, "subs");
+       lua_pushvalue(L, 1);	/* push copy of subs table */
+       lua_rawset(L, -3);	/* body["subs"] = subs table */
+  }
+  
+  /* stack top is body table. (next: name, match table, maybe subs table, captext, pos, name) */
+  lua_rawset(L, -3);		    /* match[name] = body */
+
+  /* all items below the return values will be discarded automatically */
+  return 1;
+}
+
 
 /*
 ** Put at the cache for Lua values the value indexed by 'v' in ktable
@@ -230,6 +280,19 @@ static int functioncap (CapState *cs) {
   pushluaval(cs);  /* push function */
   n = pushnestedvalues(cs, 0);  /* push nested captures */
   lua_call(cs->L, n, LUA_MULTRET);  /* call function */
+  return lua_gettop(cs->L) - top;  /* return function's results */
+}
+
+/*
+** Rosie function capture
+*/
+static int rosiecap (CapState *cs) {
+  int n;
+  int top = lua_gettop(cs->L);
+  lua_pushcfunction(cs->L, r_create_match);  /* push function */
+  pushluaval(cs);  /* push rosie node name */
+  n = pushnestedvalues(cs, 0);  /* push nested captures */
+  lua_call(cs->L, n+1, LUA_MULTRET);  /* call function */
   return lua_gettop(cs->L) - top;  /* return function's results */
 }
 
@@ -503,6 +566,7 @@ static int pushcapture (CapState *cs) {
     case Cnum: return numcap(cs);
     case Cquery: return querycap(cs);
     case Cfold: return foldcap(cs);
+    case Crosiecap: return rosiecap(cs);
     default: assert(0); return 0;
   }
 }

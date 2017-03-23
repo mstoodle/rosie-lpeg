@@ -12,7 +12,7 @@
 /* kinds of captures */
 typedef enum CapKind {
   Cclose, Cposition, Cconst, Cbackref, Carg, Csimple, Ctable, Cfunction,
-  Cquery, Cstring, Cnum, Csubst, Cfold, Cruntime, Cgroup
+  Cquery, Cstring, Cnum, Csubst, Cfold, Cruntime, Cgroup, Crosiecap
 } CapKind;
 
 
@@ -37,6 +37,8 @@ typedef struct CapState {
 int runtimecap (CapState *cs, Capture *close, const char *s, int *rem);
 int getcaptures (lua_State *L, const char *s, const char *r, int ptop);
 int finddyncap (Capture *cap, Capture *last);
+
+int r_create_match(lua_State *L);
 
 #endif
 
