@@ -283,16 +283,37 @@ static int functioncap (CapState *cs) {
   return lua_gettop(cs->L) - top;  /* return function's results */
 }
 
+static int r_pushnestedvalues (CapState *cs) {
+  Capture *co = cs->cap;
+  lua_pushliteral(cs->L, "{");
+  pushluaval(cs);			    /* push rosie node name */
+  if (isfullcap(cs->cap++)) {  /* no nested captures? */
+    lua_pushinteger(cs->L, (lua_Integer) 0);
+    lua_pushlstring(cs->L, co->s, co->siz - 1);  /* push matching text */
+    return 2;
+  }
+  else {
+    int n = 0, nsubs = 0;
+    while (!isclosecap(co)) {nsubs++; co++;};	   /* count subs+name+pos+text */
+    while (!isclosecap(cs->cap))  /* repeat for all nested patterns */
+	 n += pushcapture(cs);
+/*    lua_pushinteger(cs->L, (lua_Integer) (nsubs-3)%3);*/ /* subtract for name,pos,text */
+    lua_pushliteral(cs->L, "}");
+    cs->cap++;  /* skip close entry */
+    return n+1;
+  }
+}
+
 /*
 ** Rosie function capture
 */
 static int rosiecap (CapState *cs) {
   int n;
   int top = lua_gettop(cs->L);
-  lua_pushcfunction(cs->L, r_create_match);  /* push function */
-  pushluaval(cs);  /* push rosie node name */
-  n = pushnestedvalues(cs, 0);  /* push nested captures */
-  lua_call(cs->L, n+1, LUA_MULTRET);  /* call function */
+/*  lua_pushcfunction(cs->L, r_create_match);*/  /* push function */
+  n = r_pushnestedvalues(cs);
+/*  lua_pushinteger(cs->L, (lua_Integer) n); */
+/*  lua_call(cs->L, n+1, LUA_MULTRET);*/  /* call function */
   return lua_gettop(cs->L) - top;  /* return function's results */
 }
 
