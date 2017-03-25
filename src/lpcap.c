@@ -8,7 +8,7 @@
 
 #include "lpcap.h"
 #include "lptypes.h"
-
+#include <string.h>
 
 #define captype(cap)	((cap)->kind)
 
@@ -283,40 +283,47 @@ static int functioncap (CapState *cs) {
   return lua_gettop(cs->L) - top;  /* return function's results */
 }
 
-static int r_pushnestedvalues (CapState *cs) {
-  Capture *co = cs->cap;
-  lua_pushliteral(cs->L, "{");
-  pushluaval(cs);			    /* push rosie node name */
-  if (isfullcap(cs->cap++)) {  /* no nested captures? */
-    lua_pushinteger(cs->L, (lua_Integer) 0);
-    lua_pushlstring(cs->L, co->s, co->siz - 1);  /* push matching text */
-    return 2;
-  }
-  else {
-    int n = 0, nsubs = 0;
-    while (!isclosecap(co)) {nsubs++; co++;};	   /* count subs+name+pos+text */
-    while (!isclosecap(cs->cap))  /* repeat for all nested patterns */
-	 n += pushcapture(cs);
-/*    lua_pushinteger(cs->L, (lua_Integer) (nsubs-3)%3);*/ /* subtract for name,pos,text */
-    lua_pushliteral(cs->L, "}");
-    cs->cap++;  /* skip close entry */
-    return n+1;
-  }
-}
-
 /*
-** Rosie function capture
+** Rosie capture
 */
 static int rosiecap (CapState *cs) {
-  int n;
+  int i, k;
+  luaL_Buffer b;
+  Capture *co = cs->cap;
+  const char *start = cs->s-1;		    /* start address of input, adjusted to 1-indexing */
   int top = lua_gettop(cs->L);
-/*  lua_pushcfunction(cs->L, r_create_match);*/  /* push function */
-  n = r_pushnestedvalues(cs);
-/*  lua_pushinteger(cs->L, (lua_Integer) n); */
-/*  lua_call(cs->L, n+1, LUA_MULTRET);*/  /* call function */
-  return lua_gettop(cs->L) - top;  /* return function's results */
+  /* lua_pushliteral(cs->L, "{\""); */
+  pushluaval(cs);			    /* push rosie node name */
+  /* lua_pushliteral(cs->L, "\", "); */
+  lua_pushinteger(cs->L, (lua_Integer) (cs->cap->s-start)); /* push start index of capture */
+  /* lua_pushliteral(cs->L, ", "); */
+  if (isfullcap(cs->cap++)) {  /* no nested captures? */
+    /* lua_pushinteger(cs->L, (lua_Integer) 0); */
+    /* lua_pushlstring(cs->L, co->s, co->siz - 1);  /\* push matching text *\/ */
+    /* return 2; */
+       lua_pushliteral(cs->L, "Error: FULLCAP in rosiecap");
+       return 1;
+  }
+  else {
+/*    int nsubs = 0;
+      while (!isclosecap(co)) {nsubs++; co++;}; */	   /* count subs+name+pos+text */
+    while (!isclosecap(cs->cap))  /* repeat for all nested patterns */
+	 pushcapture(cs);
+    /* lua_pushliteral(cs->L, " }"); */
+    cs->cap++;  /* skip close entry */
+    k = lua_gettop(cs->L) - top;  /* total number of pushed items (results) */
+    luaL_buffinit(cs->L, &b);
+    for (i=k; i>=1; i--) {
+	 lua_rotate(cs->L, -i, -1);
+	 /* use luaL_checktype here to decide what to do? */
+	 luaL_addvalue(&b);
+	 /* printf("%s ", lua_tostring(cs->L, -i)); */
+    }
+    /* printf("\n"); */
+    luaL_pushresult(&b);
+    return 1;			/* was k */
+  }
 }
-
 
 /*
 ** Select capture
@@ -618,5 +625,3 @@ int getcaptures (lua_State *L, const char *s, const char *r, int ptop) {
   }
   return n;
 }
-
-

@@ -9,7 +9,7 @@
 #include "lptypes.h"
 
 
-/* kinds of captures */
+/* kinds of captures -- no more can be added, since it must fit into 4 bits! */
 typedef enum CapKind {
   Cclose, Cposition, Cconst, Cbackref, Carg, Csimple, Ctable, Cfunction,
   Cquery, Cstring, Cnum, Csubst, Cfold, Cruntime, Cgroup, Crosiecap

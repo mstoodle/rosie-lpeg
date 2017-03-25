@@ -811,7 +811,7 @@ static int lp_argcapture (lua_State *L) {
 
 /* rosie capture */
 static int r_capture (lua_State *L) {
-     luaL_checkstring(L, 2);
+     luaL_checkstring(L, 2);	/* match name */
      return capture_aux(L, Crosiecap, 2);
 }
 
