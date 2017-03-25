@@ -292,35 +292,44 @@ static int rosiecap (CapState *cs) {
   Capture *co = cs->cap;
   const char *start = cs->s-1;		    /* start address of input, adjusted to 1-indexing */
   int top = lua_gettop(cs->L);
-  /* lua_pushliteral(cs->L, "{\""); */
   pushluaval(cs);			    /* push rosie node name */
-  /* lua_pushliteral(cs->L, "\", "); */
-  lua_pushinteger(cs->L, (lua_Integer) (cs->cap->s-start)); /* push start index of capture */
-  /* lua_pushliteral(cs->L, ", "); */
+  /* lua_pushinteger(cs->L, (lua_Integer) (cs->cap->s-start)); /\* push start index of capture *\/ */
   if (isfullcap(cs->cap++)) {  /* no nested captures? */
-    /* lua_pushinteger(cs->L, (lua_Integer) 0); */
-    /* lua_pushlstring(cs->L, co->s, co->siz - 1);  /\* push matching text *\/ */
-    /* return 2; */
-       lua_pushliteral(cs->L, "Error: FULLCAP in rosiecap");
+       lua_pushliteral(cs->L, "Error: FULLCAP in rosiecap\n");
        return 1;
   }
   else {
-/*    int nsubs = 0;
-      while (!isclosecap(co)) {nsubs++; co++;}; */	   /* count subs+name+pos+text */
-    while (!isclosecap(cs->cap))  /* repeat for all nested patterns */
-	 pushcapture(cs);
-    /* lua_pushliteral(cs->L, " }"); */
+       while (!isclosecap(cs->cap)) { /* repeat for all nested patterns */
+	    pushcapture(cs);
+       }
     cs->cap++;  /* skip close entry */
     k = lua_gettop(cs->L) - top;  /* total number of pushed items (results) */
+    if (k<3) {
+	 fprintf(stderr, "Error: k<2\n");
+	 return 0;
+    }
     luaL_buffinit(cs->L, &b);
+    lua_rotate(cs->L, -k, -1);
+    printf("Name: %s\n", lua_tostring(cs->L, -1));
+    luaL_addvalue(&b);
+    k--;
+    lua_rotate(cs->L, -k, -1);
+    printf("Start: %s\n", lua_tostring(cs->L, -1));
+    luaL_addvalue(&b);
+    k--;
+    /* lua_rotate(cs->L, -k, -1); */
+    printf("End: %lld\n", lua_tointeger(cs->L, -1));
+    luaL_addvalue(&b);
+    k--;
+
     for (i=k; i>=1; i--) {
 	 lua_rotate(cs->L, -i, -1);
-	 /* use luaL_checktype here to decide what to do? */
+	 printf("Sub: %s\n", lua_tostring(cs->L, -1));
 	 luaL_addvalue(&b);
-	 /* printf("%s ", lua_tostring(cs->L, -i)); */
     }
-    /* printf("\n"); */
+
     luaL_pushresult(&b);
+    /* printf("Buf pushed: %s\n", lua_tostring(cs->L, -1)); */
     return 1;			/* was k */
   }
 }
