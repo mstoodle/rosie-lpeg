@@ -646,6 +646,8 @@ typedef struct StrAux {
 /* } */
 
 
+int dumpcaptures (CapState *cs);
+
 /*
 ** Push all values of the current capture into the stack; returns
 ** number of values pushed
@@ -682,8 +684,10 @@ static int pushcapture (CapState *cs) {
     }
     case Crosiesimple: {
       int k = r_pushnestedvalues(cs);
-      /* lua_insert(L, -k);  /\* make whole match be first result *\/ */
       return k;
+    }
+    case Cdumpcs: {
+	 return dumpcaptures(cs);
     }
     /* case Cstring: { */
     /*   luaL_Buffer b; */
@@ -743,4 +747,38 @@ int getcaptures (lua_State *L, const char *s, const char *r, int ptop) {
     n = 1;
   }
   return n;
+}
+
+
+void dump(CapState *cs);
+void dump(CapState *cs) {
+     const char *start = cs->s - 1; /* adjusted for 1-based indexing */
+     printf("Capture:\n");
+     printf("  isfullcap? %s\n", isfullcap(cs->cap) ? "true" : "false");
+     printf("  pos = %lu\n", (size_t) (cs->cap->s - start));
+     printf("  kind = %u\n", cs->cap->kind);
+     printf("  size = %u\n", cs->cap->siz);
+     printf("  idx = %u\n", cs->cap->idx);
+     lua_rawgeti(cs->L, ktableidx(cs->ptop), cs->cap->idx);
+     printf("  ktable[idx] = %s\n", lua_tostring(cs->L, -1));
+}
+
+int dumpcaptures (CapState *cs) {
+     Capture *limit = cs->cap;
+     cs->cap = cs->ocap;
+     while (cs->cap <= limit) {
+	  while (!isclosecap(cs->cap)) {  /* nested captures */
+	       dump(cs);  /* dump values at cs->cap */
+	       cs->cap++;
+	  }
+	  printf("Closed\n");
+	  dump(cs);
+	  cs->cap++;
+     }
+     while (!isclosecap(cs->cap)) {
+	  dump(cs);
+	  cs->cap++;
+     }
+     cs->cap++;
+     return 0;
 }

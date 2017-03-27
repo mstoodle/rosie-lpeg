@@ -817,6 +817,9 @@ static int r_capture (lua_State *L) {
 static int r_capindices (lua_State *L) {
      return capture_aux(L, Crosiesimple, 0);
 }
+static int r_dumpcs (lua_State *L) {
+     return capture_aux(L, Cdumpcs, 0);
+}
 
 
 static int lp_backref (lua_State *L) {
@@ -1333,6 +1336,7 @@ static struct luaL_Reg pattreg[] = {
   {"setmaxstack", lp_setmax},
   {"type", lp_type},
   /* Rosie-specific functions below */
+  {"r_dumpcs", r_dumpcs},
   {"r_match", r_match},
   {"r_create_match", r_create_match},
   {"r_capture", r_capture},
