@@ -1239,6 +1239,46 @@ static int r_match (lua_State *L) {
   return n+2;
 }
 
+int r_matchdump (lua_State *L) {
+  Capture capture[INITCAPSIZE];
+  int n;
+  lua_Integer t0, tfin, duration0, duration1;
+  const char *r;
+  size_t l;
+  Pattern *p;
+  Instruction *code;
+  const char *s;
+  size_t i;
+  int ptop;
+  t0 = (lua_Integer) clock();
+  p = (getpatt(L, 1, NULL), getpattern(L, 1));
+  code = (p->code != NULL) ? p->code : prepcompile(L, p, 1);
+  s = luaL_checklstring(L, SUBJIDX, &l);
+  i = r_initposition(L, l);
+  duration0 = luaL_checkinteger(L, 4); /* matching only */
+  duration1 = luaL_checkinteger(L, 5); /* processing captures only */
+  ptop = lua_gettop(L);
+  lua_pushnil(L);  /* initialize subscache */
+  lua_pushlightuserdata(L, capture);  /* initialize caplistidx */
+  lua_getuservalue(L, 1);  /* initialize penvidx */
+  r = match(L, s, s + i, s + l, code, capture, ptop);
+  if (r == NULL) {
+    lua_pushnil(L);
+    lua_pushinteger(L, l);	/* leftover value is len */
+    tfin = (lua_Integer) clock();
+    lua_pushinteger(L, tfin-t0+duration0); /* new matching duration */
+    lua_pushinteger(L, duration1); /* no captures, so no change */
+    return 4;
+  }
+  tfin = (lua_Integer) clock();
+
+  dumpcaptures(L, s, r, ptop);
+
+  lua_pushinteger(L, tfin-t0+duration0); /* new matching duration */
+  lua_pushinteger(L, ((lua_Integer) clock())-tfin+duration1); /* new capture processing duration */
+  return 2;
+}
+
 /*
 ** {======================================================
 ** Library creation and functions not related to matching
@@ -1341,6 +1381,7 @@ static struct luaL_Reg pattreg[] = {
   {"r_create_match", r_create_match},
   {"r_capture", r_capture},
   {"r_capindices", r_capindices},
+  {"r_matchdump", r_matchdump},
   {NULL, NULL}
 };
 
