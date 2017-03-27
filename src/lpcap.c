@@ -291,6 +291,9 @@ static int functioncap (CapState *cs) {
    > s = foos:match("123 4 56 7  9")
 */
 static int rosiecapi (CapState *cs) {
+  const char *s;
+  size_t len;
+  int intlen;
   int i, k;
   luaL_Buffer b;
   Capture *co = cs->cap;
@@ -314,22 +317,29 @@ static int rosiecapi (CapState *cs) {
     }
     luaL_buffinit(cs->L, &b);
     lua_rotate(cs->L, -k, -1);
-    printf("Name: %s\n", lua_tostring(cs->L, -1));
-    luaL_addvalue(&b);
+    s = luaL_checklstring(cs->L, -1, &len);
+    printf("Name: %s\n", s);
+    intlen = - (int) len;
+    luaL_addlstring(&b, (const char *)&intlen, sizeof(int));
+    luaL_addlstring(&b, s, len);
+    lua_pop(cs->L, 1);
     k--;
-    lua_rotate(cs->L, -k, -1);
-    printf("Start: %lld\n", lua_tointeger(cs->L, -1));
-    luaL_addvalue(&b);
-    k--;
-    printf("End: %lld\n", lua_tointeger(cs->L, -1));
-    luaL_addvalue(&b);
-    k--;
-
-    for (i=k; i>=1; i--) {
+    for (i=k-1; i>=2; i--) {
 	 lua_rotate(cs->L, -i, -1);
-	 printf("Sub: %s\n", lua_tostring(cs->L, -1));
-	 luaL_addvalue(&b);
+	 s = luaL_checklstring(cs->L, -1, &len);
+	 printf("Sub: %d (%s)\n", (int)*s, s);
+	 luaL_addlstring(&b, s, len);
+	 lua_pop(cs->L, 1);
     }
+    lua_rotate(cs->L, -2, -1);
+    intlen = (int) luaL_checkinteger(cs->L, -1);
+    printf("Start: %d\n", intlen);
+    luaL_addlstring(&b, (const char *)&intlen, sizeof(int));
+    lua_pop(cs->L, 1);
+    intlen = (int) luaL_checkinteger(cs->L, -1);
+    printf("End: %d\n", intlen);
+    luaL_addlstring(&b, (const char *)&intlen, sizeof(int));
+    lua_pop(cs->L, 1);
 
     luaL_pushresult(&b);
     /* printf("Buf pushed: %s\n", lua_tostring(cs->L, -1)); */
@@ -656,7 +666,7 @@ static int pushcapture (CapState *cs) {
     case Cnum: return numcap(cs);
     case Cquery: return querycap(cs);
     case Cfold: return foldcap(cs);
-    case Crosiecap: return rosiecapt(cs);
+    case Crosiecap: return rosiecapi(cs);
     default: assert(0); return 0;
   }
 }
