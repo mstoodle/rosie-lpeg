@@ -752,7 +752,7 @@ static int lp_divcapture (lua_State *L) {
   switch (lua_type(L, 2)) {
     case LUA_TFUNCTION: return capture_aux(L, Cfunction, 2);
     case LUA_TTABLE: return capture_aux(L, Cquery, 2);
-    case LUA_TSTRING: return capture_aux(L, Cstring, 2);
+    /* case LUA_TSTRING: return capture_aux(L, Cstring, 2); */
     case LUA_TNUMBER: {
       int n = lua_tointeger(L, 2);
       TTree *tree = newroot1sib(L, TCapture);
@@ -766,9 +766,9 @@ static int lp_divcapture (lua_State *L) {
 }
 
 
-static int lp_substcapture (lua_State *L) {
-  return capture_aux(L, Csubst, 0);
-}
+/* static int lp_substcapture (lua_State *L) { */
+/*   return capture_aux(L, Csubst, 0); */
+/* } */
 
 
 static int lp_tablecapture (lua_State *L) {
@@ -814,6 +814,10 @@ static int r_capture (lua_State *L) {
      luaL_checkstring(L, 2);	/* match name */
      return capture_aux(L, Crosiecap, 2);
 }
+static int r_capindices (lua_State *L) {
+     return capture_aux(L, Crosiesimple, 0);
+}
+
 
 static int lp_backref (lua_State *L) {
   luaL_checkany(L, 1);
@@ -1317,7 +1321,7 @@ static struct luaL_Reg pattreg[] = {
   {"Cb", lp_backref},
   {"Carg", lp_argcapture},
   {"Cp", lp_poscapture},
-  {"Cs", lp_substcapture},
+  /* {"Cs", lp_substcapture}, */
   {"Ct", lp_tablecapture},
   {"Cf", lp_foldcapture},
   {"Cg", lp_groupcapture},
@@ -1332,6 +1336,7 @@ static struct luaL_Reg pattreg[] = {
   {"r_match", r_match},
   {"r_create_match", r_create_match},
   {"r_capture", r_capture},
+  {"r_capindices", r_capindices},
   {NULL, NULL}
 };
 
