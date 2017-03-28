@@ -762,71 +762,72 @@ void dumpcs(Capture *c, const char *start, int ptop, lua_State *L) {
      printf("  ktable[idx] = %s\n", lua_tostring(L, -1));
 }
 
-int r_printcap(Capture *c, const char *start, int ptop, lua_State *L);
-int r_printcap(Capture *c, const char *start, int ptop, lua_State *L) {
-  switch (c->kind) {
-     case Crosiecap: {
-	  lua_rawgeti(L, ktableidx(ptop), c->idx);
-	  printf("%s\n", lua_tostring(L, -1));
-	  return 0;
-     }
-     case Crosiesimple: {
-	  if (c->siz) {
-	       printf("   pos = %lu\n", (size_t) (c->s ? (c->s - start) : 0));
-	       printf("   size = %u\n", c->siz-1);
-	       return 0;
-	  }
-	  else {
-	       printf("(nested) pos = %lu\n", (size_t) (c->s ? (c->s - start) : 0));
-	       return 1;
-	  }
-     }
-     case Cclose: {
-	  printf("Close: pos = %lu\n", (size_t) (c->s ? (c->s - start) : 0));
-	  return 0;
-     }
+/* int r_printcap(Capture *c, const char *start, int ptop, lua_State *L); */
+/* int r_printcap(Capture *c, const char *start, int ptop, lua_State *L) { */
+/*   switch (c->kind) { */
+/*      case Crosiecap: { */
+/* 	  lua_rawgeti(L, ktableidx(ptop), c->idx); */
+/* 	  printf("%s\n", lua_tostring(L, -1)); */
+/* 	  return 0; */
+/*      } */
+/*      case Crosiesimple: { */
+/* 	  if (c->siz) { */
+/* 	       printf("   pos = %lu\n", (size_t) (c->s ? (c->s - start) : 0)); */
+/* 	       printf("   size = %u\n", c->siz-1); */
+/* 	       return 0; */
+/* 	  } */
+/* 	  else { */
+/* 	       printf("(nested) pos = %lu\n", (size_t) (c->s ? (c->s - start) : 0)); */
+/* 	       return 1; */
+/* 	  } */
+/*      } */
+/*      case Cclose: { */
+/* 	  printf("Close: pos = %lu\n", (size_t) (c->s ? (c->s - start) : 0)); */
+/* 	  return 0; */
+/*      } */
        
-     default: {
-	  printf("Error: default case taken, captype = %d\n", c->kind);
-	  return 0;
-     }
-  }
-}
+/*      default: { */
+/* 	  printf("Error: default case taken, captype = %d\n", c->kind); */
+/* 	  return 0; */
+/*      } */
+/*   } */
+/* } */
 
 static void dumpnestedvalues (CapState *cs, const char *inputstart, long startpos) {
   int nested = 0;
   long newstartpos, endpos;
   newstartpos = endpos = 0;  
-  /* printf("** startpos = %ld\n", startpos); */
   if (isfullcap(cs->cap)) {  /* no nested captures? */
-        r_printcap(cs->cap, inputstart, cs->ptop, cs->L);
+	if (cs->cap->kind==Crosiesimple) 
+	     if (cs->cap->siz) printf("pos = %lu\n", (size_t) (cs->cap->s - inputstart));
+	     else printf("ERROR !cs->cap->siz\n");
+	else printf("ERROR !Crosiesimple");
         cs->cap++;
 	return;
   }
   else {
        Capture *prev = cs->cap;
        cs->cap++;
-       nested = (cs->cap->kind==Crosiesimple) & (!cs->cap->siz);
-       if (nested) {
-	    newstartpos = cs->cap->s - inputstart;
-	    /* printf("** newstartpos = %ld\n", newstartpos); */
-       }
-       if (! ((prev->kind==Crosiesimple) & (!prev->siz)) ) {
+       nested = (cs->cap->kind==Crosiesimple) && (!cs->cap->siz);
+       if (nested) newstartpos = cs->cap->s - inputstart;
+       if (! ((prev->kind==Crosiesimple) && (!prev->siz)) ) {
 	    printf("BEGIN ");
-	    r_printcap(prev, inputstart, cs->ptop, cs->L); /* Crosiecap */
+	    if (prev->kind==Crosiecap) {
+		 lua_rawgeti(cs->L, ktableidx(cs->ptop), prev->idx);
+		 printf("%s\n", lua_tostring(cs->L, -1));
+	    }
+	    else printf("ERROR !Crosiecap\n");
        }
-       while (!isclosecap(cs->cap)){  /* repeat for all nested patterns */
+       while (!isclosecap(cs->cap))  /* repeat for all nested patterns */
 	    dumpnestedvalues(cs, inputstart, newstartpos);
-       }
-       if (startpos) {
-	    endpos = cs->cap->s - inputstart;
-	    /* printf("** endpos = %ld\n", endpos); */
-	    /* printf("** nested capture range: %ld,%ld\n", startpos, endpos); */
-       }
+       if (startpos) endpos = cs->cap->s - inputstart;
        if (!nested) {
 	    printf("END ");
 	    if (startpos) printf("nested capture range: %ld,%ld\n", startpos, endpos);
-	    else r_printcap(cs->cap, inputstart, cs->ptop, cs->L); /* Close */
+	    else {
+		 if (cs->cap->kind==Cclose) printf("Close: pos = %lu\n", (size_t) (cs->cap->s - inputstart));
+		 else printf("ERROR !Cclose\n");
+	    }
        }
        cs->cap++;
        return;
@@ -846,24 +847,4 @@ void dumpcaptures (lua_State *L, const char *s, const char *r, int ptop) {
     } while (!isclosecap(cs.cap));
   }
 }
-
-/* int dumpcaptures (CapState *cs) { */
-/*      Capture *limit = cs->cap; */
-/*      cs->cap = cs->ocap; */
-/*      while (cs->cap <= limit) { */
-/* 	  while (!isclosecap(cs->cap)) {  /\* nested captures *\/ */
-/* 	       dump(cs);  /\* dump values at cs->cap *\/ */
-/* 	       cs->cap++; */
-/* 	  } */
-/* 	  printf("Closed\n"); */
-/* 	  dump(cs); */
-/* 	  cs->cap++; */
-/*      } */
-/*      while (!isclosecap(cs->cap)) { */
-/* 	  dump(cs); */
-/* 	  cs->cap++; */
-/*      } */
-/*      cs->cap++; */
-/*      return 0; */
-/* } */
 
