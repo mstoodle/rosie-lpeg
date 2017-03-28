@@ -762,51 +762,62 @@ void dumpcs(Capture *c, const char *start, int ptop, lua_State *L) {
      printf("  ktable[idx] = %s\n", lua_tostring(L, -1));
 }
 
-void r_printcap(Capture *c, const char *start, int ptop, lua_State *L);
-void r_printcap(Capture *c, const char *start, int ptop, lua_State *L) {
+int r_printcap(Capture *c, const char *start, int ptop, lua_State *L);
+int r_printcap(Capture *c, const char *start, int ptop, lua_State *L) {
   switch (c->kind) {
      case Crosiecap: {
 	  lua_rawgeti(L, ktableidx(ptop), c->idx);
 	  printf("%s\n", lua_tostring(L, -1));
-	  return;
+	  return 0;
      }
      case Crosiesimple: {
 	  if (c->siz) {
 	       printf("   pos = %lu\n", (size_t) (c->s ? (c->s - start) : 0));
 	       printf("   size = %u\n", c->siz-1);
+	       return 0;
 	  }
 	  else {
-	       printf("   skip? pos = %lu\n", (size_t) (c->s ? (c->s - start) : 0));
+	       printf("(nested) pos = %lu\n", (size_t) (c->s ? (c->s - start) : 0));
+	       return 1;
 	  }
-	  return;
      }
      case Cclose: {
 	  printf("Close: pos = %lu\n", (size_t) (c->s ? (c->s - start) : 0));
-	  return;
+	  return 0;
      }
        
      default: {
 	  printf("Error: default case taken, captype = %d\n", c->kind);
+	  return 0;
      }
   }
 }
 
-static void dumpnestedvalues (CapState *cs, const char *start) {
+static int dumpnestedvalues (CapState *cs, const char *start) {
+  int nested = 0;
   if (isfullcap(cs->cap)) {  /* no nested captures? */
+       printf("*");
         r_printcap(cs->cap, start, cs->ptop, cs->L);
         cs->cap++;
-        r_printcap(cs->cap, start, cs->ptop, cs->L);
+	return 0;
   }
   else {
-       printf("BEGIN ");
-       r_printcap(cs->cap, start, cs->ptop, cs->L);
+       Capture *prev = cs->cap;
        cs->cap++;
+       nested = (cs->cap->kind==Crosiesimple && !cs->cap->siz);
+       if (!nested) {
+	    printf("BEGIN ");
+	    r_printcap(prev, start, cs->ptop, cs->L); /* Crosiecap */
+       }
        while (!isclosecap(cs->cap)){  /* repeat for all nested patterns */
 	    dumpnestedvalues(cs, start);
        }
-       printf("END\n");
-       r_printcap(cs->cap, start, cs->ptop, cs->L);
+       if (!nested) {
+	    printf("END ");
+	    r_printcap(cs->cap, start, cs->ptop, cs->L); /* Close */
+       }
        cs->cap++;
+       return nested;
   }
 }
 
