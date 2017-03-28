@@ -794,13 +794,18 @@ void dumpcs(Capture *c, const char *start, int ptop, lua_State *L) {
 /* } */
 
 
+/* Signed 32-bit integers: from −2,147,483,648 to 2,147,483,647  */
+#define MAXNUMBER2STR 16
+#define INT_FMT "%d"
+#define r_tostring(s, max, i) (snprintf((s), (max), (INT_FMT), (i)))
+
 typedef enum r_status {
      /* r_OK must be first so that its value is 0 */
      r_OK, r_ERRORCrosiecap, r_ERRORCrosiesimple, r_ERRORCclose, r_ERRORcapsize
 } r_status;
 
-static int handleNodeName(Capture *cap, int ptop, luaL_Buffer *buf);
-static int handleNodeName(Capture *cap, int ptop, luaL_Buffer *buf) {
+static int handleNew(Capture *cap, int ptop, int nextnested, luaL_Buffer *buf);
+static int handleNew(Capture *cap, int ptop, int nextnested, luaL_Buffer *buf) {
   const char *name;
   size_t len;
   int intlen;
@@ -814,6 +819,28 @@ static int handleNodeName(Capture *cap, int ptop, luaL_Buffer *buf) {
       luaL_addlstring(buf, name, len);
 #ifdef ROSIE_DEBUG
       printf("NEW node: %s\n", name);	/* N.B. prints only up to the first null byte */
+#endif
+    }
+    else return r_ERRORCrosiecap;
+  }
+  return r_OK;
+}
+
+static int handleNew_json(Capture *cap, int ptop, int nextnested, luaL_Buffer *buf);
+static int handleNew_json(Capture *cap, int ptop, int nextnested, luaL_Buffer *buf) {
+  const char *name;
+  size_t len;
+  int nested = (cap->kind==Crosiesimple) && (!cap->siz);
+  if (!nested) {
+    if (cap->kind==Crosiecap) {
+      luaL_addstring(buf, "{\"type\": \"");
+      lua_rawgeti(buf->L, ktableidx(ptop), cap->idx);
+      name = luaL_checklstring(buf->L, -1, &len);
+      luaL_addvalue(buf);
+      luaL_addstring(buf, "\"");
+      if (nextnested) luaL_addstring(buf, ", \"subs\": [ ");
+#ifdef ROSIE_DEBUG
+      printf("JSON NEW node: %s\n", name);	/* N.B. prints only up to the first null byte */
 #endif
     }
     else return r_ERRORCrosiecap;
@@ -850,6 +877,42 @@ static int handleClose(long startpos, long endpos, luaL_Buffer *buf) {
      return r_OK;
 }
 
+static int handleClose_json(long startpos, long endpos, luaL_Buffer *buf);
+static int handleClose_json(long startpos, long endpos, luaL_Buffer *buf) {
+     char buff[MAXNUMBER2STR];
+     size_t len;
+     if (endpos)
+	  if (startpos) {
+	       luaL_addstring(buf, "] ");
+	       len = r_tostring(buff, MAXNUMBER2STR, (int) startpos);
+	       luaL_addstring(buf, ",\"s\": ");
+	       luaL_addlstring(buf, buff, len);
+	       luaL_addstring(buf, ",\"e\": ");
+	       len = r_tostring(buff, MAXNUMBER2STR, (int) endpos);
+	       luaL_addlstring(buf, buff, len);
+	       luaL_addstring(buf, "} ");
+#ifdef ROSIE_DEBUG
+	       printf("JSON END nested capture range: %ld,%ld\n", startpos, endpos);
+#endif
+	  }
+	  else {
+	       len = r_tostring(buff, MAXNUMBER2STR, (int) endpos);
+	       luaL_addstring(buf, ",\"e\": ");
+	       luaL_addlstring(buf, buff, len);
+	       luaL_addstring(buf, "} ");
+#ifdef ROSIE_DEBUG
+	       printf("JSON END pos = %lu\n", endpos);
+#endif
+	  }
+     else {
+	  luaL_addstring(buf, "\"s\": 0, \"e\": 0} ");
+#ifdef ROSIE_DEBUG
+	  printf("JSON END nested (empty)\n");
+#endif
+     }
+     return r_OK;
+}
+
 static int handleStart(long startpos, luaL_Buffer *buf);
 static int handleStart(long startpos, luaL_Buffer *buf) {
      int pos = (int) startpos;
@@ -860,21 +923,43 @@ static int handleStart(long startpos, luaL_Buffer *buf) {
      return r_OK;
 }
 
-static int processNestedValues (CapState *cs, const char *inputstart, long startpos, luaL_Buffer *buf) {
+static int handleStart_json(long startpos, luaL_Buffer *buf);
+static int handleStart_json(long startpos, luaL_Buffer *buf) {
+     char buff[MAXNUMBER2STR];
+     size_t len = r_tostring(buff, MAXNUMBER2STR, (int) startpos);
+     luaL_addlstring(buf, buff, len);
+     luaL_addstring(buf, ", ");
+#ifdef ROSIE_DEBUG
+     printf("JSON START pos = %lu\n", startpos);
+#endif
+     return r_OK;
+}
+
+typedef struct { 
+  int (*New)(Capture *cap, int ptop, int nested, luaL_Buffer *buf);
+  int (*Start)(long startpos, luaL_Buffer *buf);
+  int (*Close)(long startpos, long endpos, luaL_Buffer *buf);
+} encoder_functions;
+
+encoder_functions str_encoder = { handleNew, handleStart, handleClose };
+encoder_functions lua_encoder = { handleNew, handleStart, handleClose };
+encoder_functions json_encoder = { handleNew_json, handleStart_json, handleClose_json };
+
+static int processNestedValues (CapState *cs, const char *inputstart, long startpos, encoder_functions e, luaL_Buffer *buf) {
   int err;
   long newstartpos, endpos;
   newstartpos = endpos = 0;  
   if (isfullcap(cs->cap)) {  /* no nested captures? */
     switch (cs->cap->kind) {
     case Crosiesimple: {
-      if (cs->cap->siz) handleStart(cs->cap->s - inputstart, buf);
+      if (cs->cap->siz) e.Start(cs->cap->s - inputstart, buf);
       else return r_ERRORcapsize;
       break;
     }
     case Crosiecap: {		/* fullcap with no actual captures */ 
-      err = handleNodeName(cs->cap, cs->ptop, buf);
+      err = e.New(cs->cap, cs->ptop, 0, buf);
       if (err) return err;
-      handleClose(0, 0, buf);
+      e.Close(0, 0, buf);
       break;
     } 
     default: return r_ERRORCrosiesimple;
@@ -889,19 +974,19 @@ static int processNestedValues (CapState *cs, const char *inputstart, long start
     nested = (cs->cap->kind==Crosiesimple) && (!cs->cap->siz);
     emptynested = (cs->cap->kind==Crosiecap);
     if (nested) newstartpos = cs->cap->s - inputstart;
-    err = handleNodeName(prev, cs->ptop, buf);
+    err = e.New(prev, cs->ptop, nested, buf);
     if (err) return err;
     while (!isclosecap(cs->cap)) { /* repeat for all nested patterns */
-      err = processNestedValues(cs, inputstart, newstartpos, buf);
+	 err = processNestedValues(cs, inputstart, newstartpos, e, buf);
       if (err) return err;
     }
     if (startpos) endpos = cs->cap->s - inputstart;
     if (!nested) {
-      if (startpos) handleClose(startpos, endpos, buf);
+      if (startpos) e.Close(startpos, endpos, buf);
       else 
 	if (cs->cap->kind==Cclose)
-	  if (!emptynested) handleClose(0, cs->cap->s - inputstart, buf);
-	  else handleClose(0, 0, buf);
+	  if (!emptynested) e.Close(0, cs->cap->s - inputstart, buf);
+	  else e.Close(0, 0, buf);
 	else return r_ERRORCclose;
     }
     cs->cap++;
@@ -909,17 +994,23 @@ static int processNestedValues (CapState *cs, const char *inputstart, long start
   }
 }
 
-int r_getcaptures (lua_State *L, const char *s, const char *r, int ptop) {
+int r_getcaptures (lua_State *L, const char *s, int ptop, const char style) {
   luaL_Buffer buf;
   int err;
   Capture *capture = (Capture *)lua_touserdata(L, caplistidx(ptop));
+  encoder_functions encoder = json_encoder;
+  switch (style) {
+  case 'j': { encoder = json_encoder; break; }
+  case 's': { encoder = str_encoder; break; }
+  case 'l': { encoder = lua_encoder; break; }
+  }
   luaL_buffinit(L, &buf); 
   if (!isclosecap(capture)) {  /* any capture? */
        CapState cs;
        cs.ocap = cs.cap = capture; cs.L = L;
        cs.s = s; cs.valuecached = 0; cs.ptop = ptop;
     do {  /* print their values */
-	 err = processNestedValues(&cs, s-1, 0, &buf);
+	 err = processNestedValues(&cs, s-1, 0, encoder, &buf);
 	 if (err) {
 	      lua_pushnil(L);
 	      lua_pushinteger(L, err);

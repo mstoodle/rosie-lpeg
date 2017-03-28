@@ -1247,7 +1247,7 @@ int r_matchdump (lua_State *L) {
   size_t l;
   Pattern *p;
   Instruction *code;
-  const char *s;
+  const char *s, *style;
   size_t i;
   int ptop;
   t0 = (lua_Integer) clock();
@@ -1257,6 +1257,16 @@ int r_matchdump (lua_State *L) {
   i = r_initposition(L, l);
   duration0 = luaL_checkinteger(L, 4); /* matching only */
   duration1 = luaL_checkinteger(L, 5); /* processing captures only */
+  style = luaL_checkstring(L, 6);      /* e.g. 'json' */
+  switch ((char) *style) {
+  case 's': break;
+  case 'l': break;
+  case 'j': break;
+  default: {
+       lua_pushnil(L);
+       lua_pushstring(L, "illegal encoding type (valid types are lua, json, str)");
+       return 2;
+  }}
   ptop = lua_gettop(L);
   lua_pushnil(L);  /* initialize subscache */
   lua_pushlightuserdata(L, capture);  /* initialize caplistidx */
@@ -1272,7 +1282,7 @@ int r_matchdump (lua_State *L) {
   }
   tfin = (lua_Integer) clock();
 
-  n = r_getcaptures(L, s, r, ptop);
+  n = r_getcaptures(L, s, ptop, (const char) *style);
 
   lua_pushinteger(L, tfin-t0+duration0); /* new matching duration */
   lua_pushinteger(L, ((lua_Integer) clock())-tfin+duration1); /* new capture processing duration */
