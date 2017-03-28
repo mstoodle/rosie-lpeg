@@ -1272,11 +1272,11 @@ int r_matchdump (lua_State *L) {
   }
   tfin = (lua_Integer) clock();
 
-  dumpcaptures(L, s, r, ptop);
+  n = r_getcaptures(L, s, r, ptop);
 
   lua_pushinteger(L, tfin-t0+duration0); /* new matching duration */
   lua_pushinteger(L, ((lua_Integer) clock())-tfin+duration1); /* new capture processing duration */
-  return 2;
+  return n+2;
 }
 
 /*
@@ -1376,9 +1376,9 @@ static struct luaL_Reg pattreg[] = {
   {"setmaxstack", lp_setmax},
   {"type", lp_type},
   /* Rosie-specific functions below */
-  {"r_dumpcs", r_dumpcs},
-  {"r_match", r_match},
-  {"r_create_match", r_create_match},
+  /* {"r_dumpcs", r_dumpcs}, */
+  /* {"r_match", r_match}, */
+  /* {"r_create_match", r_create_match}, */
   {"r_capture", r_capture},
   {"r_capindices", r_capindices},
   {"r_matchdump", r_matchdump},

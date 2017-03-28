@@ -38,8 +38,9 @@ int runtimecap (CapState *cs, Capture *close, const char *s, int *rem);
 int getcaptures (lua_State *L, const char *s, const char *r, int ptop);
 int finddyncap (Capture *cap, Capture *last);
 
-int r_create_match(lua_State *L);
+/* int r_create_match(lua_State *L); */
 int r_matchdump (lua_State *L);
+int r_getcaptures (lua_State *L, const char *s, const char *r, int ptop);
 
 #endif
 

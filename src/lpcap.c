@@ -28,50 +28,50 @@
    arg: capture <string>
    args: subs <tables>
  */
-int r_create_match(lua_State *L) {
-  int i, nargs;
-  lua_Integer pos;
-  size_t name_l, captext_l;
-  const char *name, *captext;
-  nargs = lua_gettop(L);
-  name = luaL_checklstring(L, 1, &name_l);
-  pos = luaL_checkinteger(L, 2);
-  captext = luaL_checklstring(L, 3, &captext_l);
-  /* process submatches */
-  nargs = nargs-3;
+/* int r_create_match(lua_State *L) { */
+/*   int i, nargs; */
+/*   lua_Integer pos; */
+/*   size_t name_l, captext_l; */
+/*   const char *name, *captext; */
+/*   nargs = lua_gettop(L); */
+/*   name = luaL_checklstring(L, 1, &name_l); */
+/*   pos = luaL_checkinteger(L, 2); */
+/*   captext = luaL_checklstring(L, 3, &captext_l); */
+/*   /\* process submatches *\/ */
+/*   nargs = nargs-3; */
 
-  if (nargs > 0) {
-       lua_createtable(L, nargs, 0); /* create subs table */
-       lua_insert(L, 1);	     /* move subs table to bottom */
-       /* fill the subs table (lua_rawseti pops the value as well) */
-       for (i=nargs; i>=1; i--) lua_rawseti(L, 1, (lua_Integer) i); 
-       /* subs table now at top (below are captext, pos, name) */
-  }
+/*   if (nargs > 0) { */
+/*        lua_createtable(L, nargs, 0); /\* create subs table *\/ */
+/*        lua_insert(L, 1);	     /\* move subs table to bottom *\/ */
+/*        /\* fill the subs table (lua_rawseti pops the value as well) *\/ */
+/*        for (i=nargs; i>=1; i--) lua_rawseti(L, 1, (lua_Integer) i);  */
+/*        /\* subs table now at top (below are captext, pos, name) *\/ */
+/*   } */
 
-  lua_createtable(L, 0, 1);	    /* create match table */
-  lua_pushlstring(L, name, name_l); /* push match name */
+/*   lua_createtable(L, 0, 1);	    /\* create match table *\/ */
+/*   lua_pushlstring(L, name, name_l); /\* push match name *\/ */
 
-  lua_createtable(L, 0, 3);	    /* create match body table */
-  lua_pushliteral(L, "pos");
-  lua_pushinteger(L, pos);
-  lua_rawset(L, -3);		    /* body["pos"] = pos */
-  lua_pushliteral(L, "text");
-  lua_pushlstring(L, captext, captext_l);
-  lua_rawset(L, -3);		    /* body["text"] = captext */
+/*   lua_createtable(L, 0, 3);	    /\* create match body table *\/ */
+/*   lua_pushliteral(L, "pos"); */
+/*   lua_pushinteger(L, pos); */
+/*   lua_rawset(L, -3);		    /\* body["pos"] = pos *\/ */
+/*   lua_pushliteral(L, "text"); */
+/*   lua_pushlstring(L, captext, captext_l); */
+/*   lua_rawset(L, -3);		    /\* body["text"] = captext *\/ */
 
-  /* stack top is body table (next: name, match table, maybe subs table, captext, pos, name) */
-  if (nargs > 0) {
-       lua_pushliteral(L, "subs");
-       lua_pushvalue(L, 1);	/* push copy of subs table */
-       lua_rawset(L, -3);	/* body["subs"] = subs table */
-  }
+/*   /\* stack top is body table (next: name, match table, maybe subs table, captext, pos, name) *\/ */
+/*   if (nargs > 0) { */
+/*        lua_pushliteral(L, "subs"); */
+/*        lua_pushvalue(L, 1);	/\* push copy of subs table *\/ */
+/*        lua_rawset(L, -3);	/\* body["subs"] = subs table *\/ */
+/*   } */
   
-  /* stack top is body table. (next: name, match table, maybe subs table, captext, pos, name) */
-  lua_rawset(L, -3);		    /* match[name] = body */
+/*   /\* stack top is body table. (next: name, match table, maybe subs table, captext, pos, name) *\/ */
+/*   lua_rawset(L, -3);		    /\* match[name] = body *\/ */
 
-  /* all items below the return values will be discarded automatically */
-  return 1;
-}
+/*   /\* all items below the return values will be discarded automatically *\/ */
+/*   return 1; */
+/* } */
 
 
 /*
@@ -717,7 +717,7 @@ static int pushcapture (CapState *cs) {
     case Cnum: return numcap(cs);
     case Cquery: return querycap(cs);
     case Cfold: return foldcap(cs);
-    case Crosiecap: return rosiecapt(cs);
+    /* case Crosiecap: return rosiecapt(cs); */
     default: assert(0); return 0;
   }
 }
@@ -793,58 +793,141 @@ void dumpcs(Capture *c, const char *start, int ptop, lua_State *L) {
 /*   } */
 /* } */
 
-static void dumpnestedvalues (CapState *cs, const char *inputstart, long startpos) {
-  int nested = 0;
+
+typedef enum r_status {
+     /* r_OK must be first so that its value is 0 */
+     r_OK, r_ERRORCrosiecap, r_ERRORCrosiesimple, r_ERRORCclose, r_ERRORcapsize
+} r_status;
+
+static int handleNodeName(Capture *cap, int ptop, luaL_Buffer *buf);
+static int handleNodeName(Capture *cap, int ptop, luaL_Buffer *buf) {
+  const char *name;
+  size_t len;
+  int intlen;
+  int nested = (cap->kind==Crosiesimple) && (!cap->siz);
+  if (!nested) {
+    if (cap->kind==Crosiecap) {
+      lua_rawgeti(buf->L, ktableidx(ptop), cap->idx);
+      name = lua_tolstring(buf->L, -1, &len);
+      intlen = - (int) len;
+      luaL_addlstring(buf, (const char *)&intlen, sizeof(int));
+      luaL_addlstring(buf, name, len);
+#ifdef ROSIE_DEBUG
+      printf("NEW node: %s\n", name);	/* N.B. prints only up to the first null byte */
+#endif
+    }
+    else return r_ERRORCrosiecap;
+  }
+  return r_OK;
+}
+
+
+static int handleClose(long startpos, long endpos, luaL_Buffer *buf);
+static int handleClose(long startpos, long endpos, luaL_Buffer *buf) {
+     int pos[2];
+     if (endpos)
+	  if (startpos) {
+	       pos[0] = (int) startpos; pos[1] = (int) endpos;
+	       luaL_addlstring(buf, (const char *)pos, 2*sizeof(int));
+#ifdef ROSIE_DEBUG
+	       printf("END nested capture range: %ld,%ld\n", startpos, endpos);
+#endif
+	  }
+	  else {
+	       pos[0] = (int) endpos;
+	       luaL_addlstring(buf, (const char *)pos, sizeof(int));
+#ifdef ROSIE_DEBUG
+	       printf("END pos = %lu\n", endpos);
+#endif
+	  }
+     else {
+	  pos[0] = pos[1] = 0;
+	  luaL_addlstring(buf, (const char *)pos, 2*sizeof(int));
+#ifdef ROSIE_DEBUG
+	  printf("END nested (empty)\n");
+#endif
+     }
+     return r_OK;
+}
+
+static int handleStart(long startpos, luaL_Buffer *buf);
+static int handleStart(long startpos, luaL_Buffer *buf) {
+     int pos = (int) startpos;
+     luaL_addlstring(buf, (const char *)&pos, sizeof(int));
+#ifdef ROSIE_DEBUG
+     printf("START pos = %lu\n", startpos);
+#endif
+     return r_OK;
+}
+
+static int processNestedValues (CapState *cs, const char *inputstart, long startpos, luaL_Buffer *buf) {
+  int err;
   long newstartpos, endpos;
   newstartpos = endpos = 0;  
   if (isfullcap(cs->cap)) {  /* no nested captures? */
-	if (cs->cap->kind==Crosiesimple) 
-	     if (cs->cap->siz) printf("pos = %lu\n", (size_t) (cs->cap->s - inputstart));
-	     else printf("ERROR !cs->cap->siz\n");
-	else printf("ERROR !Crosiesimple");
-        cs->cap++;
-	return;
+    switch (cs->cap->kind) {
+    case Crosiesimple: {
+      if (cs->cap->siz) handleStart(cs->cap->s - inputstart, buf);
+      else return r_ERRORcapsize;
+      break;
+    }
+    case Crosiecap: {		/* fullcap with no actual captures */ 
+      err = handleNodeName(cs->cap, cs->ptop, buf);
+      if (err) return err;
+      handleClose(0, 0, buf);
+      break;
+    } 
+    default: return r_ERRORCrosiesimple;
+    }
+    cs->cap++;
+    return r_OK;
   }
-  else {
-       Capture *prev = cs->cap;
-       cs->cap++;
-       nested = (cs->cap->kind==Crosiesimple) && (!cs->cap->siz);
-       if (nested) newstartpos = cs->cap->s - inputstart;
-       if (! ((prev->kind==Crosiesimple) && (!prev->siz)) ) {
-	    printf("BEGIN ");
-	    if (prev->kind==Crosiecap) {
-		 lua_rawgeti(cs->L, ktableidx(cs->ptop), prev->idx);
-		 printf("%s\n", lua_tostring(cs->L, -1));
-	    }
-	    else printf("ERROR !Crosiecap\n");
-       }
-       while (!isclosecap(cs->cap))  /* repeat for all nested patterns */
-	    dumpnestedvalues(cs, inputstart, newstartpos);
-       if (startpos) endpos = cs->cap->s - inputstart;
-       if (!nested) {
-	    printf("END ");
-	    if (startpos) printf("nested capture range: %ld,%ld\n", startpos, endpos);
-	    else {
-		 if (cs->cap->kind==Cclose) printf("Close: pos = %lu\n", (size_t) (cs->cap->s - inputstart));
-		 else printf("ERROR !Cclose\n");
-	    }
-       }
-       cs->cap++;
-       return;
+  else { /* not fullcap, i.e. nested captures */
+    int nested, emptynested;
+    Capture *prev = cs->cap;
+    cs->cap++;
+    nested = (cs->cap->kind==Crosiesimple) && (!cs->cap->siz);
+    emptynested = (cs->cap->kind==Crosiecap);
+    if (nested) newstartpos = cs->cap->s - inputstart;
+    err = handleNodeName(prev, cs->ptop, buf);
+    if (err) return err;
+    while (!isclosecap(cs->cap)) { /* repeat for all nested patterns */
+      err = processNestedValues(cs, inputstart, newstartpos, buf);
+      if (err) return err;
+    }
+    if (startpos) endpos = cs->cap->s - inputstart;
+    if (!nested) {
+      if (startpos) handleClose(startpos, endpos, buf);
+      else 
+	if (cs->cap->kind==Cclose)
+	  if (!emptynested) handleClose(0, cs->cap->s - inputstart, buf);
+	  else handleClose(0, 0, buf);
+	else return r_ERRORCclose;
+    }
+    cs->cap++;
+    return r_OK;
   }
 }
 
-void dumpcaptures (lua_State *L, const char *s, const char *r, int ptop);
-void dumpcaptures (lua_State *L, const char *s, const char *r, int ptop) {
+int r_getcaptures (lua_State *L, const char *s, const char *r, int ptop) {
+  luaL_Buffer buf;
+  int err;
   Capture *capture = (Capture *)lua_touserdata(L, caplistidx(ptop));
-  printf("In dumpcaptures:\n");
+  luaL_buffinit(L, &buf); 
   if (!isclosecap(capture)) {  /* any capture? */
        CapState cs;
        cs.ocap = cs.cap = capture; cs.L = L;
        cs.s = s; cs.valuecached = 0; cs.ptop = ptop;
     do {  /* print their values */
-	 dumpnestedvalues(&cs, s-1, 0);
+	 err = processNestedValues(&cs, s-1, 0, &buf);
+	 if (err) {
+	      lua_pushnil(L);
+	      lua_pushinteger(L, err);
+	      return 2;
+	 }
     } while (!isclosecap(cs.cap));
   }
+  luaL_pushresult(&buf);
+  return 1;			/* no error, i.e. there's a string on the stack */
 }
 

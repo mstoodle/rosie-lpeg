@@ -9,6 +9,10 @@ COPT = -O2
 FILES = lpvm.o lpcap.o lptree.o lpcode.o
 endif
 
+ifdef ROSIE_DEBUG
+COPT += -DROSIE_DEBUG
+endif
+
 CWARNS = -Wall -Wextra -pedantic \
 	-Waggregate-return \
 	-Wcast-align \
