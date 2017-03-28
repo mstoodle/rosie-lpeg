@@ -793,31 +793,43 @@ int r_printcap(Capture *c, const char *start, int ptop, lua_State *L) {
   }
 }
 
-static int dumpnestedvalues (CapState *cs, const char *start) {
+static void dumpnestedvalues (CapState *cs, const char *inputstart, long startpos) {
   int nested = 0;
+  long newstartpos, endpos;
+  newstartpos = endpos = 0;  
+  /* printf("** startpos = %ld\n", startpos); */
   if (isfullcap(cs->cap)) {  /* no nested captures? */
-       printf("*");
-        r_printcap(cs->cap, start, cs->ptop, cs->L);
+        r_printcap(cs->cap, inputstart, cs->ptop, cs->L);
         cs->cap++;
-	return 0;
+	return;
   }
   else {
        Capture *prev = cs->cap;
        cs->cap++;
-       nested = (cs->cap->kind==Crosiesimple && !cs->cap->siz);
-       if (!nested) {
+       nested = (cs->cap->kind==Crosiesimple) & (!cs->cap->siz);
+       if (nested) {
+	    newstartpos = cs->cap->s - inputstart;
+	    /* printf("** newstartpos = %ld\n", newstartpos); */
+       }
+       if (! ((prev->kind==Crosiesimple) & (!prev->siz)) ) {
 	    printf("BEGIN ");
-	    r_printcap(prev, start, cs->ptop, cs->L); /* Crosiecap */
+	    r_printcap(prev, inputstart, cs->ptop, cs->L); /* Crosiecap */
        }
        while (!isclosecap(cs->cap)){  /* repeat for all nested patterns */
-	    dumpnestedvalues(cs, start);
+	    dumpnestedvalues(cs, inputstart, newstartpos);
+       }
+       if (startpos) {
+	    endpos = cs->cap->s - inputstart;
+	    /* printf("** endpos = %ld\n", endpos); */
+	    /* printf("** nested capture range: %ld,%ld\n", startpos, endpos); */
        }
        if (!nested) {
 	    printf("END ");
-	    r_printcap(cs->cap, start, cs->ptop, cs->L); /* Close */
+	    if (startpos) printf("nested capture range: %ld,%ld\n", startpos, endpos);
+	    else r_printcap(cs->cap, inputstart, cs->ptop, cs->L); /* Close */
        }
        cs->cap++;
-       return nested;
+       return;
   }
 }
 
@@ -830,7 +842,7 @@ void dumpcaptures (lua_State *L, const char *s, const char *r, int ptop) {
        cs.ocap = cs.cap = capture; cs.L = L;
        cs.s = s; cs.valuecached = 0; cs.ptop = ptop;
     do {  /* print their values */
-	 dumpnestedvalues(&cs, s-1);
+	 dumpnestedvalues(&cs, s-1, 0);
     } while (!isclosecap(cs.cap));
   }
 }
