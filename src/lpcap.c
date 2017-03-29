@@ -318,62 +318,62 @@ static int functioncap (CapState *cs) {
    > foos = lpeg.r_capture(lpeg.Cp() * foo * (lpeg.P" " * foo)^0 * lpeg.Cp(), "many foos")
    > s = foos:match("123 4 56 7  9")
 */
-static int rosiecapi (CapState *cs) {
-  const char *s;
-  size_t len;
-  int intlen;
-  int i, k;
-  luaL_Buffer b;
-  /* Capture *co = cs->cap; */
-  /* const char *start = cs->s-1;		    /\* start address of input, adjusted to 1-indexing *\/ */
-  int top = lua_gettop(cs->L);
-  pushluaval(cs);			    /* push rosie node name */
-  /* lua_pushinteger(cs->L, (lua_Integer) (cs->cap->s-start)); /\* push start index of capture *\/ */
-  if (isfullcap(cs->cap++)) {  /* no nested captures? */
-       lua_pushliteral(cs->L, "Error: FULLCAP in rosiecap\n");
-       return 1;
-  }
-  else {
-       while (!isclosecap(cs->cap)) { /* repeat for all nested patterns */
-	    pushcapture(cs);
-       }
-    cs->cap++;  /* skip close entry */
-    k = lua_gettop(cs->L) - top;  /* total number of pushed items (results) */
-    if (k<3) {
-	 fprintf(stderr, "Error: k<3\n");
-	 return 0;
-    }
-    luaL_buffinit(cs->L, &b);
-    lua_rotate(cs->L, -k, -1);
-    s = luaL_checklstring(cs->L, -1, &len);
-    printf("Name: %s\n", s);
-    intlen = - (int) len;
-    luaL_addlstring(&b, (const char *)&intlen, sizeof(int));
-    luaL_addlstring(&b, s, len);
-    lua_pop(cs->L, 1);
-    k--;
-    for (i=k-1; i>=2; i--) {
-	 lua_rotate(cs->L, -i, -1);
-	 s = luaL_checklstring(cs->L, -1, &len);
-	 printf("Sub: %d (%s)\n", (int)*s, s);
-	 luaL_addlstring(&b, s, len);
-	 lua_pop(cs->L, 1);
-    }
-    lua_rotate(cs->L, -2, -1);
-    intlen = (int) luaL_checkinteger(cs->L, -1);
-    printf("Start: %d\n", intlen);
-    luaL_addlstring(&b, (const char *)&intlen, sizeof(int));
-    lua_pop(cs->L, 1);
-    intlen = (int) luaL_checkinteger(cs->L, -1);
-    printf("End: %d\n", intlen);
-    luaL_addlstring(&b, (const char *)&intlen, sizeof(int));
-    lua_pop(cs->L, 1);
+/* static int rosiecapi (CapState *cs) { */
+/*   const char *s; */
+/*   size_t len; */
+/*   int intlen; */
+/*   int i, k; */
+/*   luaL_Buffer b; */
+/*   /\* Capture *co = cs->cap; *\/ */
+/*   /\* const char *start = cs->s-1;		    /\\* start address of input, adjusted to 1-indexing *\\/ *\/ */
+/*   int top = lua_gettop(cs->L); */
+/*   pushluaval(cs);			    /\* push rosie node name *\/ */
+/*   /\* lua_pushinteger(cs->L, (lua_Integer) (cs->cap->s-start)); /\\* push start index of capture *\\/ *\/ */
+/*   if (isfullcap(cs->cap++)) {  /\* no nested captures? *\/ */
+/*        lua_pushliteral(cs->L, "Error: FULLCAP in rosiecap\n"); */
+/*        return 1; */
+/*   } */
+/*   else { */
+/*        while (!isclosecap(cs->cap)) { /\* repeat for all nested patterns *\/ */
+/* 	    pushcapture(cs); */
+/*        } */
+/*     cs->cap++;  /\* skip close entry *\/ */
+/*     k = lua_gettop(cs->L) - top;  /\* total number of pushed items (results) *\/ */
+/*     if (k<3) { */
+/* 	 fprintf(stderr, "Error: k<3\n"); */
+/* 	 return 0; */
+/*     } */
+/*     luaL_buffinit(cs->L, &b); */
+/*     lua_rotate(cs->L, -k, -1); */
+/*     s = luaL_checklstring(cs->L, -1, &len); */
+/*     printf("Name: %s\n", s); */
+/*     intlen = - (int) len; */
+/*     luaL_addlstring(&b, (const char *)&intlen, sizeof(int)); */
+/*     luaL_addlstring(&b, s, len); */
+/*     lua_pop(cs->L, 1); */
+/*     k--; */
+/*     for (i=k-1; i>=2; i--) { */
+/* 	 lua_rotate(cs->L, -i, -1); */
+/* 	 s = luaL_checklstring(cs->L, -1, &len); */
+/* 	 printf("Sub: %d (%s)\n", (int)*s, s); */
+/* 	 luaL_addlstring(&b, s, len); */
+/* 	 lua_pop(cs->L, 1); */
+/*     } */
+/*     lua_rotate(cs->L, -2, -1); */
+/*     intlen = (int) luaL_checkinteger(cs->L, -1); */
+/*     printf("Start: %d\n", intlen); */
+/*     luaL_addlstring(&b, (const char *)&intlen, sizeof(int)); */
+/*     lua_pop(cs->L, 1); */
+/*     intlen = (int) luaL_checkinteger(cs->L, -1); */
+/*     printf("End: %d\n", intlen); */
+/*     luaL_addlstring(&b, (const char *)&intlen, sizeof(int)); */
+/*     lua_pop(cs->L, 1); */
 
-    luaL_pushresult(&b);
-    /* printf("Buf pushed: %s\n", lua_tostring(cs->L, -1)); */
-    return 1;			/* was k */
-  }
-}
+/*     luaL_pushresult(&b); */
+/*     /\* printf("Buf pushed: %s\n", lua_tostring(cs->L, -1)); *\/ */
+/*     return 1;			/\* was k *\/ */
+/*   } */
+/* } */
 
 /*
   Rosie capture where the patterns are made using captures like in Rosie v0.99x
@@ -382,62 +382,62 @@ static int rosiecapi (CapState *cs) {
     > foos = lpeg.r_capture(lpeg.C(foo * (lpeg.P" " * foo)^0), "many foos")
     > s = foos:match("123 4 56 7  9")
 */
-static int rosiecapt (CapState *cs) {
-  int i, k, intlen;
-  int pos[2];
-  size_t len;
-  luaL_Buffer b;
-  const char *s;
-  Capture *co = cs->cap; 
-  const char *start = cs->s-1;		    /* start address of input, adjusted to 1-indexing */ 
-  int top = lua_gettop(cs->L);
-  pushluaval(cs);			    /* push rosie node name */
-  if (isfullcap(cs->cap++)) {  /* no nested captures? */
-       pos[0] = (int) (co->s - start);
-       pos[1] = (int) co->siz-1 + pos[0];
-       lua_pushlstring(cs->L, (const char *)pos, 2*sizeof(int));
-       fprintf(stderr, "** Fullcap in rosiecapt\n");
-       return 2;
-  }
-  else {
-       while (!isclosecap(cs->cap)) { /* repeat for all nested patterns */
-	    pushcapture(cs);
-       }
-    cs->cap++;  /* skip close entry */
-    k = lua_gettop(cs->L) - top;  /* total number of pushed items (results) */ 
-    fprintf(stderr, "** in rosiecapt k = %d\n", k);
-    if (k<2) { 
-    	 fprintf(stderr, "Error: k<2\n"); fflush(NULL);
-    	 return 0; 
-    } 
-    luaL_buffinit(cs->L, &b);
-    lua_rotate(cs->L, -k, -1);
-    printf("*** %d\n", lua_type(cs->L, -1)); fflush(NULL);
-    s =  luaL_checklstring(cs->L, -1, &len);
-    printf("Name: %s\n", s);
-    intlen = - (int) len;
-    luaL_addlstring(&b, (const char *)&intlen, sizeof(int));
-    luaL_addlstring(&b, s, len);
-    lua_pop(cs->L, 1);
-    k--;
-    for (i=k; i>=2; i--) {
-	 lua_rotate(cs->L, -i, -1);
-	 s = luaL_checklstring(cs->L, -1, &len);
-	 printf("Sub: %s\n", s);
-	 luaL_addlstring(&b, s, len);
-	 lua_pop(cs->L, 1);
-    }
-    lua_rotate(cs->L, -1, -1);
-    s = luaL_checklstring(cs->L, -1, &len);
-    printf("Text: %s\n", s);
-    luaL_addlstring(&b, s, len);
-    lua_pop(cs->L, 1);
+/* static int rosiecapt (CapState *cs) { */
+/*   int i, k, intlen; */
+/*   int pos[2]; */
+/*   size_t len; */
+/*   luaL_Buffer b; */
+/*   const char *s; */
+/*   Capture *co = cs->cap;  */
+/*   const char *start = cs->s-1;		    /\* start address of input, adjusted to 1-indexing *\/  */
+/*   int top = lua_gettop(cs->L); */
+/*   pushluaval(cs);			    /\* push rosie node name *\/ */
+/*   if (isfullcap(cs->cap++)) {  /\* no nested captures? *\/ */
+/*        pos[0] = (int) (co->s - start); */
+/*        pos[1] = (int) co->siz-1 + pos[0]; */
+/*        lua_pushlstring(cs->L, (const char *)pos, 2*sizeof(int)); */
+/*        fprintf(stderr, "** Fullcap in rosiecapt\n"); */
+/*        return 2; */
+/*   } */
+/*   else { */
+/*        while (!isclosecap(cs->cap)) { /\* repeat for all nested patterns *\/ */
+/* 	    pushcapture(cs); */
+/*        } */
+/*     cs->cap++;  /\* skip close entry *\/ */
+/*     k = lua_gettop(cs->L) - top;  /\* total number of pushed items (results) *\/  */
+/*     fprintf(stderr, "** in rosiecapt k = %d\n", k); */
+/*     if (k<2) {  */
+/*     	 fprintf(stderr, "Error: k<2\n"); fflush(NULL); */
+/*     	 return 0;  */
+/*     }  */
+/*     luaL_buffinit(cs->L, &b); */
+/*     lua_rotate(cs->L, -k, -1); */
+/*     printf("*** %d\n", lua_type(cs->L, -1)); fflush(NULL); */
+/*     s =  luaL_checklstring(cs->L, -1, &len); */
+/*     printf("Name: %s\n", s); */
+/*     intlen = - (int) len; */
+/*     luaL_addlstring(&b, (const char *)&intlen, sizeof(int)); */
+/*     luaL_addlstring(&b, s, len); */
+/*     lua_pop(cs->L, 1); */
+/*     k--; */
+/*     for (i=k; i>=2; i--) { */
+/* 	 lua_rotate(cs->L, -i, -1); */
+/* 	 s = luaL_checklstring(cs->L, -1, &len); */
+/* 	 printf("Sub: %s\n", s); */
+/* 	 luaL_addlstring(&b, s, len); */
+/* 	 lua_pop(cs->L, 1); */
+/*     } */
+/*     lua_rotate(cs->L, -1, -1); */
+/*     s = luaL_checklstring(cs->L, -1, &len); */
+/*     printf("Text: %s\n", s); */
+/*     luaL_addlstring(&b, s, len); */
+/*     lua_pop(cs->L, 1); */
 
-    luaL_pushresult(&b);
-    /* printf("Buf pushed: %s\n", lua_tostring(cs->L, -1)); */
-    return 1;			/* was k */
-  }
-}
+/*     luaL_pushresult(&b); */
+/*     /\* printf("Buf pushed: %s\n", lua_tostring(cs->L, -1)); *\/ */
+/*     return 1;			/\* was k *\/ */
+/*   } */
+/* } */
 
 /*
 ** Select capture
@@ -749,7 +749,7 @@ int getcaptures (lua_State *L, const char *s, const char *r, int ptop) {
   return n;
 }
 
-
+/*
 void dumpcs(Capture *c, const char *start, int ptop, lua_State *L);
 void dumpcs(Capture *c, const char *start, int ptop, lua_State *L) {
      printf("Capture:\n");
@@ -761,38 +761,7 @@ void dumpcs(Capture *c, const char *start, int ptop, lua_State *L) {
      lua_rawgeti(L, ktableidx(ptop), c->idx);
      printf("  ktable[idx] = %s\n", lua_tostring(L, -1));
 }
-
-/* int r_printcap(Capture *c, const char *start, int ptop, lua_State *L); */
-/* int r_printcap(Capture *c, const char *start, int ptop, lua_State *L) { */
-/*   switch (c->kind) { */
-/*      case Crosiecap: { */
-/* 	  lua_rawgeti(L, ktableidx(ptop), c->idx); */
-/* 	  printf("%s\n", lua_tostring(L, -1)); */
-/* 	  return 0; */
-/*      } */
-/*      case Crosiesimple: { */
-/* 	  if (c->siz) { */
-/* 	       printf("   pos = %lu\n", (size_t) (c->s ? (c->s - start) : 0)); */
-/* 	       printf("   size = %u\n", c->siz-1); */
-/* 	       return 0; */
-/* 	  } */
-/* 	  else { */
-/* 	       printf("(nested) pos = %lu\n", (size_t) (c->s ? (c->s - start) : 0)); */
-/* 	       return 1; */
-/* 	  } */
-/*      } */
-/*      case Cclose: { */
-/* 	  printf("Close: pos = %lu\n", (size_t) (c->s ? (c->s - start) : 0)); */
-/* 	  return 0; */
-/*      } */
-       
-/*      default: { */
-/* 	  printf("Error: default case taken, captype = %d\n", c->kind); */
-/* 	  return 0; */
-/*      } */
-/*   } */
-/* } */
-
+*/
 
 typedef enum r_status {
      /* r_OK must be first so that its value is 0 */
@@ -820,7 +789,6 @@ static int handleNodeName(Capture *cap, int ptop, luaL_Buffer *buf) {
   }
   return r_OK;
 }
-
 
 static int handleClose(long startpos, long endpos, luaL_Buffer *buf);
 static int handleClose(long startpos, long endpos, luaL_Buffer *buf) {
@@ -909,7 +877,7 @@ static int processNestedValues (CapState *cs, const char *inputstart, long start
   }
 }
 
-int r_getcaptures (lua_State *L, const char *s, const char *r, int ptop) {
+int r_getcaptures (lua_State *L, const char *s, int ptop) {
   luaL_Buffer buf;
   int err;
   Capture *capture = (Capture *)lua_touserdata(L, caplistidx(ptop));
