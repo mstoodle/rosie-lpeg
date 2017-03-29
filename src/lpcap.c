@@ -682,10 +682,10 @@ static int pushcapture (CapState *cs) {
       lua_pushvalue(L, (cs->cap++)->idx);  /* value is in the stack */
       return 1;
     }
-    case Crosiesimple: {
-      int k = r_pushnestedvalues(cs);
-      return k;
-    }
+    /* case Crosiesimple: { */
+    /*   int k = r_pushnestedvalues(cs); */
+    /*   return k; */
+    /* } */
 
     /* case Cdumpcs: { */
     /* 	 return dumpcaptures(cs); */
@@ -751,25 +751,51 @@ int getcaptures (lua_State *L, const char *s, const char *r, int ptop) {
   return n;
 }
 
-/*
-void dumpcs(Capture *c, const char *start, int ptop, lua_State *L);
-void dumpcs(Capture *c, const char *start, int ptop, lua_State *L) {
-     printf("Capture:\n");
-     printf("  isfullcap? %s\n", isfullcap(c) ? "true" : "false");
-     printf("  kind = %u\n", c->kind);
-     printf("  pos = %lu\n", (size_t) (c->s ? (c->s - start) : 0));
-     printf("  size = %u\n", c->siz);
-     printf("  idx = %u\n", c->idx);
-     lua_rawgeti(L, ktableidx(ptop), c->idx);
-     printf("  ktable[idx] = %s\n", lua_tostring(L, -1));
+static void dumpcapture(CapState *cs) {
+  Capture *c = cs->cap;
+  const char *start = cs->s;
+  const char *i = c->s;
+  if (c->kind==Cclose) printf("CLOSE:\n");
+  else
+    if (c->siz == 0) printf("OPEN:\n");
+    else printf("Full capture:\n");
+  printf("  isfullcap? %s\n", isfullcap(c) ? "true" : "false");
+  printf("  kind = %u\n", c->kind);
+  printf("  pos = %lu\n", (size_t) (c->s ? (c->s - start) : 0));
+  printf("  size = %u\n", c->siz);
+  printf("  idx = %u\n", c->idx);
+  lua_rawgeti(cs->L, ktableidx(cs->ptop), c->idx);
+  printf("  ktable[idx] = %s\n", lua_tostring(cs->L, -1));
+  if (isfullcap(c)) {
+    if (!(c->kind==Cclose)) {
+      printf("  text of match: |");
+      for (; i < (c->s + c->siz); i++) printf("%c", *i);
+      printf("|\n");
+    }
+    cs->cap++;			/* advance to the next capture */
+  }
+  else {		       /* not fullcap, i.e. nested captures */
+    printf("(");
+    cs->cap++;
+    while (!isclosecap(cs->cap)) dumpcapture(cs);
+    printf(")");
+    dumpcapture(cs);		/* display the close */
+  }
 }
-*/
 
-/* #define BUFFER luaL_Buffer */
-/* #define LUABUF_init luaL_buffinit */
-/* #define LUABUF_addlstring luaL_addlstring */
-/* #define BUF_addstring luaL_addstring */
-/* #define PUSHRESULT luaL_pushresult */
+int r_dumpcaptures(lua_State *L, const char *s, int ptop) {
+  Capture *capture = (Capture *)lua_touserdata(L, caplistidx(ptop));
+  if (!isclosecap(capture)) {  /* is there any capture? */
+    CapState cs;
+    cs.ocap = cs.cap = capture; cs.L = L;
+    cs.s = s; cs.valuecached = 0; cs.ptop = ptop;
+    do { dumpcapture(&cs); } while (!isclosecap(cs.cap));
+    dumpcapture(&cs);		/* display the final close */  
+  }
+  return 0;
+}
+
+#define Crosiesimple 99		/* TEMPORARY */
 
 typedef enum r_status {
      /* r_OK must be first so that its value is 0 */

@@ -12,7 +12,7 @@
 /* kinds of captures -- no more can be added, since it must fit into 4 bits! */
 typedef enum CapKind {
   Cclose, Cposition, Cconst, Cbackref, Carg, Csimple, Ctable, Cfunction,
-  Cquery, Cnum, Cfold, Cruntime, Cgroup, Crosiecap, Crosiesimple, Cdumpcs
+  Cquery, Cnum, Cfold, Cruntime, Cgroup, Crosiecap, Crosiedumpcaps
 } CapKind;
 
 
@@ -38,9 +38,10 @@ int runtimecap (CapState *cs, Capture *close, const char *s, int *rem);
 int getcaptures (lua_State *L, const char *s, const char *r, int ptop);
 int finddyncap (Capture *cap, Capture *last);
 
-/* int r_create_match(lua_State *L); */
-int r_matchdump (lua_State *L);
+/* Rosie additions */
+int r_match (lua_State *L);
 int r_getcaptures (lua_State *L, const char *s, int ptop);
+int r_dumpcaptures(lua_State *L, const char *s, int ptop);
 
 #endif
 

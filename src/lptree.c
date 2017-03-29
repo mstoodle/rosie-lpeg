@@ -815,12 +815,13 @@ static int r_capture (lua_State *L) {
      luaL_checkstring(L, 2);	/* match name */
      return capture_aux(L, Crosiecap, 2);
 }
-static int r_capindices (lua_State *L) {
-     return capture_aux(L, Crosiesimple, 0);
-}
-/* static int r_dumpcs (lua_State *L) { */
-/*      return capture_aux(L, Cdumpcs, 0); */
+/* static int r_capindices (lua_State *L) { */
+/*      return capture_aux(L, Crosiesimple, 0); */
 /* } */
+
+/* static int r_dumpcaps (lua_State *L) {  */
+/*      return capture_aux(L, Crosiedumpcaps, 0);  */
+/* }  */
 
 
 static int lp_backref (lua_State *L) {
@@ -1240,6 +1241,7 @@ static size_t r_initposition (lua_State *L, size_t len) {
 /*   return n+2; */
 /* } */
 
+int r_matchdump (lua_State *L);
 int r_matchdump (lua_State *L) {
   Capture capture[INITCAPSIZE];
   int n;
@@ -1273,7 +1275,7 @@ int r_matchdump (lua_State *L) {
   }
   tfin = (lua_Integer) clock();
 
-  n = r_getcaptures(L, s, ptop);
+  n = r_dumpcaptures(L, s, ptop); /* was r_getcaptures */
 
   lua_pushinteger(L, tfin-t0+duration0); /* new matching duration */
   lua_pushinteger(L, ((lua_Integer) clock())-tfin+duration1); /* new capture processing duration */
@@ -1377,12 +1379,12 @@ static struct luaL_Reg pattreg[] = {
   {"setmaxstack", lp_setmax},
   {"type", lp_type},
   /* Rosie-specific functions below */
-  /* {"r_dumpcs", r_dumpcs}, */
+  /* {"r_dumpcaps", r_dumpcaps},  */
   /* {"r_match", r_match}, */
   /* {"r_create_match", r_create_match}, */
-  {"r_capture", r_capture},
-  {"r_capindices", r_capindices},
-  {"r_matchdump", r_matchdump},
+  {"rcap", r_capture},
+  /* {"r_capindices", r_capindices}, */
+  {"rmatch", r_matchdump},
   {"newbuffer", r_lua_newbuffer},
   {"getdata", r_lua_getdata},
   {"add", r_lua_add},
