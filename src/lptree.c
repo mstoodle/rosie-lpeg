@@ -18,6 +18,7 @@
 #include "lpprint.h"
 #include "lptree.h"
 
+#include "rbuf.h"
 
 /* number of siblings for each tree */
 const byte numsiblings[] = {
@@ -1382,9 +1383,11 @@ static struct luaL_Reg pattreg[] = {
   {"r_capture", r_capture},
   {"r_capindices", r_capindices},
   {"r_matchdump", r_matchdump},
+  {"newbuffer", r_lua_newbuffer},
+  {"getdata", r_lua_getdata},
+  {"add", r_lua_add},
   {NULL, NULL}
 };
-
 
 static struct luaL_Reg metareg[] = {
   {"__mul", lp_seq},
