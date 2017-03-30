@@ -15,9 +15,9 @@
  * there.
  */
 
-/* buffer for arbitrary data, grows and shrinks */
+/* buffer for arbitrary char data, grows and shrinks */
 typedef struct r_Buffer {
-  void *data;
+  char *data;
   size_t capacity;
   size_t n;			/* number of bytes in use */
   char initb[R_BUFFERSIZE];	/* initial buffer */

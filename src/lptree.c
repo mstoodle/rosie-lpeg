@@ -1241,8 +1241,7 @@ static size_t r_initposition (lua_State *L, size_t len) {
 /*   return n+2; */
 /* } */
 
-int r_matchdump (lua_State *L);
-int r_matchdump (lua_State *L) {
+int r_match (lua_State *L) {
   Capture capture[INITCAPSIZE];
   int n;
   lua_Integer t0, tfin, duration0, duration1;
@@ -1275,7 +1274,7 @@ int r_matchdump (lua_State *L) {
   }
   tfin = (lua_Integer) clock();
 
-  n = r_dumpcaptures(L, s, ptop); /* was r_getcaptures */
+  n = r_getcaptures(L, s, r, ptop);
 
   lua_pushinteger(L, tfin-t0+duration0); /* new matching duration */
   lua_pushinteger(L, ((lua_Integer) clock())-tfin+duration1); /* new capture processing duration */
@@ -1379,12 +1378,8 @@ static struct luaL_Reg pattreg[] = {
   {"setmaxstack", lp_setmax},
   {"type", lp_type},
   /* Rosie-specific functions below */
-  /* {"r_dumpcaps", r_dumpcaps},  */
-  /* {"r_match", r_match}, */
-  /* {"r_create_match", r_create_match}, */
   {"rcap", r_capture},
-  /* {"r_capindices", r_capindices}, */
-  {"rmatch", r_matchdump},
+  {"rmatch", r_match},
   {"newbuffer", r_lua_newbuffer},
   {"getdata", r_lua_getdata},
   {"add", r_lua_add},

@@ -9,10 +9,10 @@
 #include "lptypes.h"
 
 
-/* kinds of captures -- no more can be added, since it must fit into 4 bits! */
+/* kinds of captures -- 16 at most, since the kind must fit into 4 bits! */
 typedef enum CapKind {
   Cclose, Cposition, Cconst, Cbackref, Carg, Csimple, Ctable, Cfunction,
-  Cquery, Cnum, Cfold, Cruntime, Cgroup, Crosiecap, Crosiedumpcaps
+  Cquery, Cstring, Cnum, Csubst, Cfold, Cruntime, Cgroup, Crosiecap
 } CapKind;
 
 
@@ -39,9 +39,12 @@ int getcaptures (lua_State *L, const char *s, const char *r, int ptop);
 int finddyncap (Capture *cap, Capture *last);
 
 /* Rosie additions */
+typedef enum r_status { 
+     /* OK must be first so that its value is 0 */ 
+     ROSIE_OK, ROSIE_OPEN_ERROR, ROSIE_CLOSE_ERROR, ROSIE_SIZ_ERROR, ROSIE_FULLCAP_ERROR
+} r_status; 
 int r_match (lua_State *L);
-int r_getcaptures (lua_State *L, const char *s, int ptop);
-int r_dumpcaptures(lua_State *L, const char *s, int ptop);
+int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop);
 
 #endif
 
