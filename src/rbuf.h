@@ -16,19 +16,19 @@
  */
 
 /* buffer for arbitrary char data, grows and shrinks */
-typedef struct r_Buffer {
+typedef struct rBuffer {
   char *data;
   size_t capacity;
   size_t n;			/* number of bytes in use */
   char initb[R_BUFFERSIZE];	/* initial buffer */
-} r_Buffer;
+} rBuffer;
 
 int r_lua_newbuffer (lua_State *L);
 int r_lua_getdata (lua_State *L);
 int r_lua_add (lua_State *L);
 
-r_Buffer *r_newbuffer (lua_State *L);
+rBuffer *r_newbuffer (lua_State *L);
 /* the functions below DO NOT use the stack */
-char *r_prepbuffsize (lua_State *L, r_Buffer *buf, size_t sz);
-void r_addlstring (lua_State *L, r_Buffer *buf, const char *s, size_t l);
-void r_addstring (lua_State *L, r_Buffer *buf, const char *s);
+char *r_prepbuffsize (lua_State *L, rBuffer *buf, size_t sz);
+void r_addlstring (lua_State *L, rBuffer *buf, const char *s, size_t l);
+void r_addstring (lua_State *L, rBuffer *buf, const char *s);

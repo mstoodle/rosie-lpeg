@@ -19,7 +19,7 @@
 
 /* dynamically allocate storage to replace initb when initb becomes too small */
 /* returns pointer to start of new buffer */
-static void *resizebuf (lua_State *L, r_Buffer *buf, size_t newsize) {
+static void *resizebuf (lua_State *L, rBuffer *buf, size_t newsize) {
   void *ud;
   lua_Alloc allocf = lua_getallocf(L, &ud);
   void *temp = allocf(ud, buf->data, buf->capacity, newsize);
@@ -39,7 +39,7 @@ static void *resizebuf (lua_State *L, r_Buffer *buf, size_t newsize) {
 #define buffisdynamic(B)	((B)->data != (B)->initb)
 
 /* returns a pointer to a free area with at least 'sz' bytes */
-char *r_prepbuffsize (lua_State *L, r_Buffer *B, size_t sz) {
+char *r_prepbuffsize (lua_State *L, rBuffer *B, size_t sz) {
   char *newbuff;
   if (B->capacity - B->n < sz) {  /* not enough space? */
     size_t newsize = B->capacity * 2; /* double buffer size */
@@ -66,19 +66,19 @@ char *r_prepbuffsize (lua_State *L, r_Buffer *B, size_t sz) {
 
 static int buffgc (lua_State *L) {
   /* top of stack is 'self' for gc metamethod */
-  r_Buffer *buf = (r_Buffer *)luaL_checkudata(L, 1, ROSIE_BUFFER);
+  rBuffer *buf = (rBuffer *)luaL_checkudata(L, 1, ROSIE_BUFFER);
   if (buffisdynamic(buf)) resizebuf(L, buf, 0);
   return 0;
 }
 
 static int buffsize (lua_State *L) {
-  r_Buffer *buf = (r_Buffer *)luaL_checkudata(L, 1, ROSIE_BUFFER);
+  rBuffer *buf = (rBuffer *)luaL_checkudata(L, 1, ROSIE_BUFFER);
   lua_pushinteger(L, buf->n);
   return 1;
 }
 
-r_Buffer *r_newbuffer (lua_State *L) {
-  r_Buffer *buf = (r_Buffer *)lua_newuserdata(L, sizeof(r_Buffer));
+rBuffer *r_newbuffer (lua_State *L) {
+  rBuffer *buf = (rBuffer *)lua_newuserdata(L, sizeof(rBuffer));
   buf->data = buf->initb;		/* intially, data storage is statically allocated in initb  */
   buf->n = 0;			/* contents length is 0 */
   buf->capacity = R_BUFFERSIZE;	/* size of initb */
@@ -99,7 +99,7 @@ r_Buffer *r_newbuffer (lua_State *L) {
   return buf;
 }
 
-void r_addlstring (lua_State *L, r_Buffer *buf, const char *s, size_t l) {
+void r_addlstring (lua_State *L, rBuffer *buf, const char *s, size_t l) {
   if (l > 0) {		     /* avoid 'memcpy' when 's' can be NULL */
     char *b = r_prepbuffsize(L, buf, l);
     memcpy(b, s, l * sizeof(char));
@@ -107,7 +107,7 @@ void r_addlstring (lua_State *L, r_Buffer *buf, const char *s, size_t l) {
   }
 }
 
-void r_addstring (lua_State *L, r_Buffer *buf, const char *s) {
+void r_addstring (lua_State *L, rBuffer *buf, const char *s) {
   r_addlstring(L, buf, s, strlen(s));
 }
 
@@ -117,7 +117,7 @@ int r_lua_newbuffer(lua_State *L) {
 }
 
 int r_lua_getdata (lua_State *L) {
-  r_Buffer *buf = (r_Buffer *)luaL_checkudata(L, 1, ROSIE_BUFFER);
+  rBuffer *buf = (rBuffer *)luaL_checkudata(L, 1, ROSIE_BUFFER);
   lua_pushlstring(L, buf->data, buf->n);
   return 1;
 }
@@ -125,7 +125,7 @@ int r_lua_getdata (lua_State *L) {
 int r_lua_add (lua_State *L) {
   size_t len;
   const char *s;
-  r_Buffer *buf = (r_Buffer *)luaL_checkudata(L, 1, ROSIE_BUFFER);
+  rBuffer *buf = (rBuffer *)luaL_checkudata(L, 1, ROSIE_BUFFER);
   s = lua_tolstring(L, 2, &len);
   r_addlstring(L, buf, s, len);
   lua_pushvalue(L, 1);		/* return the buffer itself */
