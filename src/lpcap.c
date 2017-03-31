@@ -743,11 +743,10 @@ int getcaptures (lua_State *L, const char *s, const char *r, int ptop) {
 
 /* Rosie extensions */
 typedef struct {  
-  int (*Open)(CapState *cs, Capture **start, rBuffer *buf, int count);
+  int (*Open)(CapState *cs, rBuffer *buf, int count);
   int (*Fullcapture)(CapState *cs, rBuffer *buf, int count);
-  int (*Close)(CapState *cs, Capture *start, rBuffer *buf, int count);
-  int (*Post)(CapState *cs, int i, rBuffer *buf, int count)
-} encoder_functions; 
+  int (*Close)(CapState *cs, rBuffer *buf, int count);
+} encoder_functions;
  
 static void print_capture(CapState *cs) {
   Capture *c = cs->cap;
@@ -779,66 +778,67 @@ static int debug_Fullcapture(CapState *cs, rBuffer *buf, int count) {
   return ROSIE_OK;
 }
 
-static int debug_Close(CapState *cs, Capture *start, rBuffer *buf, int count) {
+static int debug_Close(CapState *cs, rBuffer *buf, int count) {
   if (!cs->cap->kind==Cclose) return ROSIE_CLOSE_ERROR;
-  printf("CLOSE: (start position (1-based) = %ld)\n", start->s - cs->s + 1);
+  printf("CLOSE:\n");
   print_capture(cs);
-  print_capture_text(start->s, cs->cap->s);
   return ROSIE_OK;
 }
 
-static int debug_Open(CapState *cs, Capture **start, rBuffer *buf, int count) {
+static int debug_Open(CapState *cs, rBuffer *buf, int count) {
   if ((cs->cap->kind == Cclose) || (cs->cap->siz != 0)) return ROSIE_OPEN_ERROR;
-  *start = cs->cap;
   printf("OPEN:\n");
   print_capture(cs);
   return ROSIE_OK;
 }
 
-static void encode_range(lua_State *L, size_t s, size_t e, rBuffer *buf) {
-  int pos[2];
-  pos[0] = (int) s;
-  pos[1] = (int) e;
-  r_addlstring(L, buf, (const char *)pos, 2*sizeof(int));
+static void encode_pos(lua_State *L, size_t pos, int negate, rBuffer *buf) {
+  int intpos = (int) pos;
+  if (negate) intpos = - intpos;
+  r_addlstring(L, buf, (const char *)&intpos, sizeof(int));
+}
+
+static void encode_string(lua_State *L, const char *str, size_t len, rBuffer *buf) {
+  int intlen = (int) len; 
+  r_addlstring(L, buf, (const char *)&intlen, sizeof(int)); 
+  r_addlstring(L, buf, str, len); 
 }
 
 static void encode_name(CapState *cs, rBuffer *buf) {
   const char *name;
   size_t len;
-  int intlen;
-  lua_State *L = cs->L;
-  lua_rawgeti(L, ktableidx(cs->ptop), cs->cap->idx); 
-  name = lua_tolstring(L, -1, &len); 
-  lua_pop(L, 1); 
-  intlen = - ((int) len); 
-  r_addlstring(L, buf, (const char *)&intlen, sizeof(int)); 
-  r_addlstring(L, buf, name, len); 
+  lua_rawgeti(cs->L, ktableidx(cs->ptop), cs->cap->idx); 
+  name = lua_tolstring(cs->L, -1, &len); 
+  encode_string(cs->L, name, len, buf);
+  lua_pop(cs->L, 1); 
 }
 
 static int byte_Fullcapture(CapState *cs, rBuffer *buf, int count) {
   Capture *c = cs->cap;
   size_t s, e;
-  if (cs->cap->siz == 0) return ROSIE_SIZ_ERROR;
+  if (!isfullcap(c)) return ROSIE_SIZ_ERROR;
   if (c->kind == Cclose) return ROSIE_FULLCAP_ERROR;
-  encode_name(cs, buf);
   s = c->s - cs->s + 1;		/* 1-based start position */
-  e = s + c->siz - 1;		/* length */
-  encode_range(cs->L, s, e, buf);
+  e = s + c->siz - 1;
+  encode_pos(cs->L, s, 1, buf);
+  encode_name(cs, buf);
+  encode_pos(cs->L, e, 0, buf);
   return ROSIE_OK;
 }
 
-static int byte_Close(CapState *cs, Capture *start, rBuffer *buf, int count) {
-  size_t s, e;
-  if (!cs->cap->kind==Cclose) return ROSIE_CLOSE_ERROR;
-  s = start->s - cs->s + 1;	/* 1-based start position */
+static int byte_Close(CapState *cs, rBuffer *buf, int count) {
+  size_t e;
+  if (!isclosecap(cs->cap)) return ROSIE_CLOSE_ERROR;
   e = cs->cap->s - cs->s + 1;	/* 1-based end position */
-  encode_range(cs->L, s, e, buf);
+  encode_pos(cs->L, e, 0, buf);
   return ROSIE_OK;
 }
 
-static int byte_Open(CapState *cs, Capture **start, rBuffer *buf, int count) {
-  *start = cs->cap;
+static int byte_Open(CapState *cs, rBuffer *buf, int count) {
+  size_t s;
   if ((cs->cap->kind == Cclose) || (cs->cap->siz != 0)) return ROSIE_OPEN_ERROR;
+  s = cs->cap->s - cs->s + 1;	/* 1-based start position */
+  encode_pos(cs->L, s, 1, buf);
   encode_name(cs, buf);
   return ROSIE_OK;
 }
@@ -849,14 +849,10 @@ static int byte_Open(CapState *cs, Capture **start, rBuffer *buf, int count) {
 #define r_tostring(s, max, i) (snprintf((s), (max), (INT_FMT), (i)))
 #define isopencap(cap)	((captype(cap) != Cclose) && ((cap)->siz == 0))
 
-static void json_encode_range(lua_State *L, size_t s, size_t e, rBuffer *buf) {
+static void json_encode_pos(lua_State *L, size_t pos, rBuffer *buf) {
   char numbuff[MAXNUMBER2STR];
   size_t len;
-  r_addstring(L, buf, ",\"s\":");
-  len = r_tostring(numbuff, MAXNUMBER2STR, (int) s);
-  r_addlstring(L, buf, numbuff, len);
-  r_addstring(L, buf, ",\"e\":");
-  len = r_tostring(numbuff, MAXNUMBER2STR, (int) e);
+  len = r_tostring(numbuff, MAXNUMBER2STR, (int) pos);
   r_addlstring(L, buf, numbuff, len);
 }
 
@@ -875,47 +871,47 @@ static int json_Fullcapture(CapState *cs, rBuffer *buf, int count) {
   if (cs->cap->siz == 0) return ROSIE_SIZ_ERROR;
   if (c->kind == Cclose) return ROSIE_FULLCAP_ERROR;
   if (count) r_addstring(cs->L, buf, ",");
-  r_addstring(cs->L, buf, "{\"type\":\"");
+  s = c->s - cs->s + 1;		/* 1-based start position */
+  r_addstring(cs->L, buf, "{\"s\":");
+  json_encode_pos(cs->L, s, buf);
+  r_addstring(cs->L, buf, ",\"type\":\"");
   json_encode_name(cs, buf);
   r_addstring(cs->L, buf, "\"");
-  s = c->s - cs->s + 1;		/* 1-based start position */
   e = s + c->siz - 1;		/* length */
-  json_encode_range(cs->L, s, e, buf);
+  r_addstring(cs->L, buf, ",\"e\":");
+  json_encode_pos(cs->L, e, buf);
   r_addstring(cs->L, buf, "}");
   return ROSIE_OK;
 }
 
-static int json_Close(CapState *cs, Capture *start, rBuffer *buf, int count) {
-  size_t s, e;
+static int json_Close(CapState *cs, rBuffer *buf, int count) {
+  size_t e;
   if (!cs->cap->kind==Cclose) return ROSIE_CLOSE_ERROR;
-  s = start->s - cs->s + 1;	/* 1-based start position */
   e = cs->cap->s - cs->s + 1;	/* 1-based end position */
   r_addstring(cs->L, buf, "]");
-  json_encode_range(cs->L, s, e, buf);
+  r_addstring(cs->L, buf, ",\"e\":");
+  json_encode_pos(cs->L, e, buf);
   r_addstring(cs->L, buf, "}");
-  /* if (count) r_addstring(cs->L, buf, ","); */
   return ROSIE_OK;
 }
 
-static int json_Open(CapState *cs, Capture **start, rBuffer *buf, int count) {
-  *start = cs->cap;
+static int json_Open(CapState *cs, rBuffer *buf, int count) {
+  size_t s;
   if (!isopencap(cs->cap)) return ROSIE_OPEN_ERROR;
   if (count) r_addstring(cs->L, buf, ",");
-  r_addstring(cs->L, buf, "{\"type\":\"");
+  s = cs->cap->s - cs->s + 1;	/* 1-based start position */
+  r_addstring(cs->L, buf, "{\"s\":");
+  json_encode_pos(cs->L, s, buf);
+  r_addstring(cs->L, buf, ",\"type\":\"");
   json_encode_name(cs, buf);
   r_addstring(cs->L, buf, "\",");
   r_addstring(cs->L, buf, "\"subs\":[");
   return ROSIE_OK;
 }
 
-static int json_Post(CapState *cs, int i, rBuffer *buf) {
-  if (i>1) r_addstring(cs->L, buf, ",");
-  return ROSIE_OK;
-}
-
-encoder_functions debug_encoder = { debug_Open, debug_Fullcapture, debug_Close, NULL };
-encoder_functions byte_encoder = { byte_Open, byte_Fullcapture, byte_Close, NULL };
-encoder_functions json_encoder = { json_Open, json_Fullcapture, json_Close, json_Post };
+encoder_functions debug_encoder = { debug_Open, debug_Fullcapture, debug_Close };
+encoder_functions byte_encoder = { byte_Open, byte_Fullcapture, byte_Close };
+encoder_functions json_encoder = { json_Open, json_Fullcapture, json_Close };
 
 /* N.B. caploop does NOT have to be recursive.  It can be a flat loop
    if we do not need to save the start pos value.  We can change the
@@ -923,9 +919,8 @@ encoder_functions json_encoder = { json_Open, json_Fullcapture, json_Close, json
    name, etc. */
 static int caploop(CapState *cs, encoder_functions *encode, rBuffer *buf, int count) {
   int err;
-  Capture *start;
   int inner_count = 0;
-  err = encode->Open(cs, &start, buf, count);
+  err = encode->Open(cs, buf, count);
   if (err) return err;
   cs->cap++;
   while (!isclosecap(cs->cap)) {
@@ -938,18 +933,19 @@ static int caploop(CapState *cs, encoder_functions *encode, rBuffer *buf, int co
     }
     inner_count++;
   }
-  encode->Close(cs, start, buf, count);
+  encode->Close(cs, buf, count);
   cs->cap++;
   return ROSIE_OK;
 }
 
 int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int etype) {
   int err;
+  char code;
   encoder_functions encode;
   Capture *capture = (Capture *)lua_touserdata(L, caplistidx(ptop));
   rBuffer *buf = r_newbuffer(L);
   switch (etype) {
-  case -1: { encode = debug_encoder; break; } /* MAYBE: wrap this option with ifdef ROSIE_DEBUG  */
+  case -1: { encode = debug_encoder; break; }
   case 0: { encode = byte_encoder; break; }
   case 1: { encode = json_encoder; break; }
   default: {
@@ -957,6 +953,8 @@ int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int etyp
     lua_pushstring(L, "invalid encoding type");
     return 2;
   } }
+  /* code = 'B'+etype; */
+  /* r_addchar(L, buf, code); */
   if (!isclosecap(capture)) {  /* is there a capture? */
     CapState cs;
     cs.ocap = cs.cap = capture; cs.L = L;

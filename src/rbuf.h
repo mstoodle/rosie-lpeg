@@ -31,4 +31,6 @@ rBuffer *r_newbuffer (lua_State *L);
 /* the functions below DO NOT use the stack */
 char *r_prepbuffsize (lua_State *L, rBuffer *buf, size_t sz);
 void r_addlstring (lua_State *L, rBuffer *buf, const char *s, size_t l);
-void r_addstring (lua_State *L, rBuffer *buf, const char *s);
+#define r_addstring(L, buf, s) (r_addlstring)((L), (buf), (s), strlen(s));
+#define r_addchar(L, buf, c) (r_addlstring)((L), (buf), &(c), sizeof(char));
+

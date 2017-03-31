@@ -107,10 +107,6 @@ void r_addlstring (lua_State *L, rBuffer *buf, const char *s, size_t l) {
   }
 }
 
-void r_addstring (lua_State *L, rBuffer *buf, const char *s) {
-  r_addlstring(L, buf, s, strlen(s));
-}
-
 int r_lua_newbuffer(lua_State *L) {
   r_newbuffer(L);		/* leaves buffer on stack */
   return 1;
