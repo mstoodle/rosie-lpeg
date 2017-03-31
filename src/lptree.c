@@ -1143,8 +1143,8 @@ static int lp_printcode (lua_State *L) {
 ** Get the initial position for the match, interpreting negative
 ** values from the end of the subject
 */
-static size_t initposition (lua_State *L, size_t len) {
-  lua_Integer ii = luaL_optinteger(L, 3, 1);
+static size_t initposition (lua_State *L, size_t len, int idx) {
+  lua_Integer ii = luaL_optinteger(L, idx, 1);
   if (ii > 0) {  /* positive index? */
     if ((size_t)ii <= len)  /* inside the string? */
       return (size_t)ii - 1;  /* return it (corrected to 0-base) */
@@ -1168,7 +1168,7 @@ static int lp_match (lua_State *L) {
   Pattern *p = (getpatt(L, 1, NULL), getpattern(L, 1));
   Instruction *code = (p->code != NULL) ? p->code : prepcompile(L, p, 1);
   const char *s = luaL_checklstring(L, SUBJIDX, &l);
-  size_t i = initposition(L, l);
+  size_t i = initposition(L, l, SUBJIDX+1);
   int ptop = lua_gettop(L);
   lua_pushnil(L);  /* initialize subscache */
   lua_pushlightuserdata(L, capture);  /* initialize caplistidx */
@@ -1181,21 +1181,19 @@ static int lp_match (lua_State *L) {
   return getcaptures(L, s, r, ptop);
 }
 
-/* for r_match, the 3rd arg (start position) is REQUIRED */
-static size_t r_initposition (lua_State *L, size_t len);
-static size_t r_initposition (lua_State *L, size_t len) {
-     lua_Integer ii = luaL_checkinteger(L, 3);
-  if (ii > 0) {  /* positive index? */
-    if ((size_t)ii <= len)  /* inside the string? */
-      return (size_t)ii - 1;  /* return it (corrected to 0-base) */
-    else return len;  /* crop at the end */
-  }
-  else {  /* negative index */
-    if ((size_t)(-ii) <= len)  /* inside the string? */
-      return len - ((size_t)(-ii));  /* return position from the end */
-    else return 0;  /* crop at the beginning */
-  }
-}
+/* static size_t r_initposition (lua_State *L, size_t len) { */
+/*   lua_Integer ii = luaL_optinteger(L, 3, 1); */
+/*   if (ii > 0) {  /\* positive index? *\/ */
+/*     if ((size_t)ii <= len)  /\* inside the string? *\/ */
+/*       return (size_t)ii - 1;  /\* return it (corrected to 0-base) *\/ */
+/*     else return len;  /\* crop at the end *\/ */
+/*   } */
+/*   else {  /\* negative index *\/ */
+/*     if ((size_t)(-ii) <= len)  /\* inside the string? *\/ */
+/*       return len - ((size_t)(-ii));  /\* return position from the end *\/ */
+/*     else return 0;  /\* crop at the beginning *\/ */
+/*   } */
+/* } */
 
 /* for r_match, the 4th, 5th args (accumulated times) are REQUIRED */
 
@@ -1241,9 +1239,11 @@ static size_t r_initposition (lua_State *L, size_t len) {
 /*   return n+2; */
 /* } */
 
+/* args: peg, input, start position, encoding type, total time accumulator, lpeg time accumulator,  */
+/* encoding types: debug (-1), byte array (0), json (1) */
 int r_match (lua_State *L) {
   Capture capture[INITCAPSIZE];
-  int n;
+  int n, encoding;
   lua_Integer t0, tfin, duration0, duration1;
   const char *r;
   size_t l;
@@ -1256,9 +1256,11 @@ int r_match (lua_State *L) {
   p = (getpatt(L, 1, NULL), getpattern(L, 1));
   code = (p->code != NULL) ? p->code : prepcompile(L, p, 1);
   s = luaL_checklstring(L, SUBJIDX, &l);
-  i = r_initposition(L, l);
-  duration0 = luaL_checkinteger(L, 4); /* matching only */
-  duration1 = luaL_checkinteger(L, 5); /* processing captures only */
+  i = initposition(L, l, SUBJIDX+1);
+  encoding = luaL_optinteger(L, SUBJIDX+2, 0);
+  duration0 = luaL_optinteger(L, SUBJIDX+3, 0);	/* total time accumulator */
+  duration1 = luaL_optinteger(L, SUBJIDX+4, 0); /* time without post-processing */
+  /* prepare for matching */
   ptop = lua_gettop(L);
   lua_pushnil(L);  /* initialize subscache */
   lua_pushlightuserdata(L, capture);  /* initialize caplistidx */
@@ -1274,7 +1276,7 @@ int r_match (lua_State *L) {
   }
   tfin = (lua_Integer) clock();
 
-  n = r_getcaptures(L, s, r, ptop);
+  n = r_getcaptures(L, s, r, ptop, encoding);
 
   lua_pushinteger(L, tfin-t0+duration0); /* new matching duration */
   lua_pushinteger(L, ((lua_Integer) clock())-tfin+duration1); /* new capture processing duration */
