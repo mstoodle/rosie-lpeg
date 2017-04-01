@@ -761,9 +761,8 @@ encoder_functions byte_encoder = { byte_Open, byte_Fullcapture, byte_Close };
 encoder_functions json_encoder = { json_Open, json_Fullcapture, json_Close };
 
 /* N.B. caploop does NOT have to be recursive.  It can be a flat loop
-   if we do not need to save the start pos value.  We can change the
-   byte array encoding to put the start value up front, then the node
-   name, etc. */
+   if we keep our own "stack" of inner count values, which is needed
+   so the json encoder can insert commas into lists of more than one item. */
 static int caploop(CapState *cs, encoder_functions *encode, rBuffer *buf, int count) {
   int err;
   int inner_count = 0;
