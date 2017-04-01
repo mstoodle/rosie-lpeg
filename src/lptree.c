@@ -767,9 +767,9 @@ static int lp_divcapture (lua_State *L) {
 }
 
 
-/* static int lp_substcapture (lua_State *L) { */
-/*   return capture_aux(L, Csubst, 0); */
-/* } */
+static int lp_substcapture (lua_State *L) { 
+  return capture_aux(L, Csubst, 0); 
+} 
 
 
 static int lp_tablecapture (lua_State *L) {
@@ -1368,7 +1368,7 @@ static struct luaL_Reg pattreg[] = {
   {"Cb", lp_backref},
   {"Carg", lp_argcapture},
   {"Cp", lp_poscapture},
-  /* {"Cs", lp_substcapture}, */
+  {"Cs", lp_substcapture},
   {"Ct", lp_tablecapture},
   {"Cf", lp_foldcapture},
   {"Cg", lp_groupcapture},
