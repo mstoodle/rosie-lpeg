@@ -723,9 +723,8 @@ static int json_Fullcapture(CapState *cs, rBuffer *buf, int count) {
   json_encode_pos(cs->L, s, buf);
   r_addstring(cs->L, buf, ",\"type\":\"");
   json_encode_name(cs, buf);
-  r_addstring(cs->L, buf, "\"");
+  r_addstring(cs->L, buf, "\",\"subs\":[],\"e\":");
   e = s + c->siz - 1;		/* length */
-  r_addstring(cs->L, buf, ",\"e\":");
   json_encode_pos(cs->L, e, buf);
   r_addstring(cs->L, buf, "}");
   return ROSIE_OK;
@@ -751,8 +750,7 @@ static int json_Open(CapState *cs, rBuffer *buf, int count) {
   json_encode_pos(cs->L, s, buf);
   r_addstring(cs->L, buf, ",\"type\":\"");
   json_encode_name(cs, buf);
-  r_addstring(cs->L, buf, "\",");
-  r_addstring(cs->L, buf, "\"subs\":[");
+  r_addstring(cs->L, buf, "\",\"subs\":[");
   return ROSIE_OK;
 }
 
@@ -787,7 +785,7 @@ int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int etyp
   int err;
   char code;
   encoder_functions encode;
-  Capture *capture;
+  Capture *capture = (Capture *)lua_touserdata(L, caplistidx(ptop));
   rBuffer *buf = r_newbuffer(L);
   switch (etype) {
   case -1: { encode = debug_encoder; break; }
@@ -798,14 +796,14 @@ int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int etyp
     lua_pushstring(L, "invalid encoding type");
     return 2;
   } }
-  capture = (Capture *)lua_touserdata(L, caplistidx(ptop));
-  code = 'B'+etype; 
-  r_addchar(L, buf, code); 
+  /* code = 'B'+etype;  */
+  /* r_addchar(L, buf, code);  */
   if (!isclosecap(capture)) {  /* is there a capture? */
     CapState cs;
     cs.ocap = cs.cap = capture; cs.L = L;
     cs.s = s; cs.valuecached = 0; cs.ptop = ptop;
-    err = caploop(&cs, &encode, buf, 0);
+    if (isfullcap(capture)) err = encode.Fullcapture(&cs, buf, 0); 
+    else err = caploop(&cs, &encode, buf, 0);
     if (err) {
       lua_pushnil(L);
       lua_pushinteger(L, err);
