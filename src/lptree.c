@@ -810,19 +810,6 @@ static int lp_argcapture (lua_State *L) {
   return 1;
 }
 
-/* rosie capture */
-static int r_capture (lua_State *L) {
-     luaL_checkstring(L, 2);	/* match name */
-     return capture_aux(L, Crosiecap, 2);
-}
-/* static int r_capindices (lua_State *L) { */
-/*      return capture_aux(L, Crosiesimple, 0); */
-/* } */
-
-/* static int r_dumpcaps (lua_State *L) {  */
-/*      return capture_aux(L, Crosiedumpcaps, 0);  */
-/* }  */
-
 
 static int lp_backref (lua_State *L) {
   luaL_checkany(L, 1);
@@ -869,6 +856,14 @@ static int lp_matchtime (lua_State *L) {
   tree->key = addtonewktable(L, 1, 2);
   return 1;
 }
+
+
+/* rosie capture */
+static int r_capture (lua_State *L) {
+     luaL_checkstring(L, 2);	/* match name */
+     return capture_aux(L, Crosiecap, 2);
+}
+
 
 /* }====================================================== */
 
@@ -1181,66 +1176,11 @@ static int lp_match (lua_State *L) {
   return getcaptures(L, s, r, ptop);
 }
 
-/* static size_t r_initposition (lua_State *L, size_t len) { */
-/*   lua_Integer ii = luaL_optinteger(L, 3, 1); */
-/*   if (ii > 0) {  /\* positive index? *\/ */
-/*     if ((size_t)ii <= len)  /\* inside the string? *\/ */
-/*       return (size_t)ii - 1;  /\* return it (corrected to 0-base) *\/ */
-/*     else return len;  /\* crop at the end *\/ */
-/*   } */
-/*   else {  /\* negative index *\/ */
-/*     if ((size_t)(-ii) <= len)  /\* inside the string? *\/ */
-/*       return len - ((size_t)(-ii));  /\* return position from the end *\/ */
-/*     else return 0;  /\* crop at the beginning *\/ */
-/*   } */
-/* } */
 
-/* for r_match, the 4th, 5th args (accumulated times) are REQUIRED */
-
-/*
-** Rosie match function
+/* required args: peg, input
+ * optional args: start position, encoding type, total time accumulator, lpeg time accumulator
+ * encoding types: debug (-1), byte array (0), json (1) 
 */
-/* static int r_match (lua_State *L) { */
-/*   Capture capture[INITCAPSIZE]; */
-/*   int n; */
-/*   lua_Integer t0, tfin, duration0, duration1; */
-/*   const char *r; */
-/*   size_t l; */
-/*   Pattern *p; */
-/*   Instruction *code; */
-/*   const char *s; */
-/*   size_t i; */
-/*   int ptop; */
-/*   t0 = (lua_Integer) clock(); */
-/*   p = (getpatt(L, 1, NULL), getpattern(L, 1)); */
-/*   code = (p->code != NULL) ? p->code : prepcompile(L, p, 1); */
-/*   s = luaL_checklstring(L, SUBJIDX, &l); */
-/*   i = r_initposition(L, l); */
-/*   duration0 = luaL_checkinteger(L, 4); /\* matching only *\/ */
-/*   duration1 = luaL_checkinteger(L, 5); /\* processing captures only *\/ */
-/*   ptop = lua_gettop(L); */
-/*   lua_pushnil(L);  /\* initialize subscache *\/ */
-/*   lua_pushlightuserdata(L, capture);  /\* initialize caplistidx *\/ */
-/*   lua_getuservalue(L, 1);  /\* initialize penvidx *\/ */
-/*   r = match(L, s, s + i, s + l, code, capture, ptop); */
-/*   if (r == NULL) { */
-/*     lua_pushnil(L); */
-/*     lua_pushinteger(L, l);	/\* leftover value is len *\/ */
-/*     tfin = (lua_Integer) clock(); */
-/*     lua_pushinteger(L, tfin-t0+duration0); /\* new matching duration *\/ */
-/*     lua_pushinteger(L, duration1); /\* no captures, so no change *\/ */
-/*     return 4; */
-/*   } */
-/*   tfin = (lua_Integer) clock(); */
-/*   n = getcaptures(L, s, r, ptop); */
-/*   /\* lua_pushinteger(L, ??); leftover value so that we can eliminate the Cp() added in pattern.tlpeg *\/ */
-/*   lua_pushinteger(L, tfin-t0+duration0); /\* new matching duration *\/ */
-/*   lua_pushinteger(L, ((lua_Integer) clock())-tfin+duration1); /\* new capture processing duration *\/ */
-/*   return n+2; */
-/* } */
-
-/* args: peg, input, start position, encoding type, total time accumulator, lpeg time accumulator,  */
-/* encoding types: debug (-1), byte array (0), json (1) */
 int r_match (lua_State *L) {
   Capture capture[INITCAPSIZE];
   int n, encoding;
@@ -1278,8 +1218,8 @@ int r_match (lua_State *L) {
 
   n = r_getcaptures(L, s, r, ptop, encoding);
 
-  lua_pushinteger(L, tfin-t0+duration0); /* new matching duration */
-  lua_pushinteger(L, ((lua_Integer) clock())-tfin+duration1); /* new capture processing duration */
+  lua_pushinteger(L, ((lua_Integer) clock())-tfin+duration1); /* total time */
+  lua_pushinteger(L, tfin-t0+duration0); /* lpeg vm time */
   return n+2;
 }
 
@@ -1385,6 +1325,7 @@ static struct luaL_Reg pattreg[] = {
   {"newbuffer", r_lua_newbuffer},
   {"getdata", r_lua_getdata},
   {"add", r_lua_add},
+  {"decode", r_lua_decode},
   {NULL, NULL}
 };
 

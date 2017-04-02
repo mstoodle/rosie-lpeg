@@ -683,12 +683,77 @@ static int byte_Close(CapState *cs, rBuffer *buf, int count) {
 
 static int byte_Open(CapState *cs, rBuffer *buf, int count) {
   size_t s;
-  if ((cs->cap->kind == Cclose) || (cs->cap->siz != 0)) return ROSIE_OPEN_ERROR;
+  if ((cs->cap->kind != Crosiecap) || (cs->cap->siz != 0)) return ROSIE_OPEN_ERROR;
   s = cs->cap->s - cs->s + 1;	/* 1-based start position */
   encode_pos(cs->L, s, 1, buf);
   encode_name(cs, buf);
   return ROSIE_OK;
 }
+
+int r_pushmatch(lua_State *L, rBuffer *buf, const char **s, const char **e);
+int r_pushmatch(lua_State *L, rBuffer *buf, const char **s, const char **e) {
+  int i, top;
+  int n = 0;
+  int intp = (int)**s;
+  (*s) += sizeof(int);
+  printf("Entering pushmatch and seeing %d at position %ld\n", intp, (*s)-buf->data);
+  if (*s > *e) luaL_error(L, "corrupt match data (buffer overrun)");
+  if (intp > 0) luaL_error(L, "corrupt match data (expected start marker)");
+
+  lua_createtable(L, 0, 5);	/* create match table */ 
+  lua_pushliteral(L, "s"); 
+  lua_pushinteger(L, -intp); 
+  lua_rawset(L, -3);		/* match["s"] = start position */ 
+
+  intp = (int)**s;		/* length of name string */
+  (*s) += sizeof(int);
+  if (intp < 0) luaL_error(L, "corrupt match data (expected length of name)");
+
+  lua_pushliteral(L, "type"); 
+  lua_pushlstring(L, *s, intp);	
+  lua_rawset(L, -3);		/* match["type"] = name */ 
+  
+  (*s) += intp;			/* advance to first char after name */
+
+  /* process subs, if any */
+  top = lua_gettop(L);
+  while ((int)**s < 0) {
+    i = r_pushmatch(L, buf, s, e);
+    printf("after pushmatch #%d, at (%ld,%ld)\n", n, (*s)-buf->data, (*e)-buf->data); fflush(NULL);
+    n += i;
+  } 
+  
+  printf("number of subs calculated: %d (n=%d)\n", lua_gettop(L)-top, n);
+  if (n) {    
+    lua_createtable(L, n, 0); /* create subs table */     
+    lua_insert(L, top+1);    /* move subs table to below the subs */     
+    /* fill the subs table (lua_rawseti pops the value as well) */     
+    for (i=n; i>=1; i--) lua_rawseti(L, top+1, (lua_Integer) i);      
+    /* subs table now at top, below: match table */    
+    lua_pushliteral(L, "subs");    
+    lua_insert(L, -2);		/* move subs table to top of stack */
+    lua_rawset(L, -3);		/* match["subs"] = subs table */    
+  }    
+
+  intp = (int)**s;
+  (*s) += sizeof(int);
+  lua_pushliteral(L, "e");  
+  lua_pushinteger(L, intp);  
+  lua_rawset(L, -3);		/* match["e"] = end position */  
+  /* leave match table on the stack */
+  return 1;
+
+}
+  
+
+int r_lua_decode (lua_State *L) {
+  rBuffer *buf = (rBuffer *)luaL_checkudata(L, 1, ROSIE_BUFFER);
+  const char *s = buf->data;	/* start of data */
+  const char *e = buf->data + buf->n; /* end of data */
+  r_pushmatch(L, buf, &s, &e);
+  return 1;
+}
+
 
 /* Signed 32-bit integers: from −2,147,483,648 to 2,147,483,647  */
 #define MAXNUMBER2STR 16
@@ -783,7 +848,6 @@ static int caploop(CapState *cs, encoder_functions *encode, rBuffer *buf, int co
 
 int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int etype) {
   int err;
-  char code;
   encoder_functions encode;
   Capture *capture = (Capture *)lua_touserdata(L, caplistidx(ptop));
   rBuffer *buf = r_newbuffer(L);
@@ -796,13 +860,14 @@ int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int etyp
     lua_pushstring(L, "invalid encoding type");
     return 2;
   } }
-  /* code = 'B'+etype;  */
-  /* r_addchar(L, buf, code);  */
   if (!isclosecap(capture)) {  /* is there a capture? */
     CapState cs;
     cs.ocap = cs.cap = capture; cs.L = L;
     cs.s = s; cs.valuecached = 0; cs.ptop = ptop;
-    if (isfullcap(capture)) err = encode.Fullcapture(&cs, buf, 0); 
+    if (isfullcap(capture)) {
+      err = encode.Fullcapture(&cs, buf, 0);
+      if (!err && (!isclosecap(++cs.cap))) err = ROSIE_OPEN_ERROR;
+    }
     else err = caploop(&cs, &encode, buf, 0);
     if (err) {
       lua_pushnil(L);

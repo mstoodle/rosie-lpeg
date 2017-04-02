@@ -19,6 +19,7 @@ typedef enum CapKind {
 typedef struct Capture {
   const char *s;  /* subject position */
   unsigned short idx;  /* extra info (group name, arg index, etc.) */
+  unsigned short flags;		/* rosie extension */
   byte kind;  /* kind of capture */
   byte siz;  /* size of full capture + 1 (0 = not a full capture) */
 } Capture;
@@ -45,6 +46,7 @@ typedef enum r_status {
 } r_status; 
 int r_match (lua_State *L);
 int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int encoding);
+int r_lua_decode (lua_State *L);
 
 #endif
 
