@@ -694,36 +694,33 @@ int r_pushmatch(lua_State *L, rBuffer *buf, const char **s, const char **e);
 int r_pushmatch(lua_State *L, rBuffer *buf, const char **s, const char **e) {
   int i, top;
   int n = 0;
-  int intp = (int)**s;
+  int *intp = (int *)*s;
   (*s) += sizeof(int);
-  printf("Entering pushmatch and seeing %d at position %ld\n", intp, (*s)-buf->data);
   if (*s > *e) luaL_error(L, "corrupt match data (buffer overrun)");
-  if (intp > 0) luaL_error(L, "corrupt match data (expected start marker)");
+  if ((*intp) > 0) luaL_error(L, "corrupt match data (expected start marker)");
 
   lua_createtable(L, 0, 5);	/* create match table */ 
   lua_pushliteral(L, "s"); 
-  lua_pushinteger(L, -intp); 
+  lua_pushinteger(L, -(*intp)); 
   lua_rawset(L, -3);		/* match["s"] = start position */ 
 
-  intp = (int)**s;		/* length of name string */
+  intp = (int *)*s;		/* length of name string */
   (*s) += sizeof(int);
-  if (intp < 0) luaL_error(L, "corrupt match data (expected length of name)");
+  if (*intp < 0) luaL_error(L, "corrupt match data (expected length of name)");
 
   lua_pushliteral(L, "type"); 
-  lua_pushlstring(L, *s, intp);	
+  lua_pushlstring(L, *s, *intp);	
   lua_rawset(L, -3);		/* match["type"] = name */ 
   
-  (*s) += intp;			/* advance to first char after name */
+  (*s) += *intp;			/* advance to first char after name */
 
   /* process subs, if any */
   top = lua_gettop(L);
-  while ((int)**s < 0) {
+  while (*(int *)*s < 0) {
     i = r_pushmatch(L, buf, s, e);
-    printf("after pushmatch #%d, at (%ld,%ld)\n", n, (*s)-buf->data, (*e)-buf->data); fflush(NULL);
     n += i;
   } 
   
-  printf("number of subs calculated: %d (n=%d)\n", lua_gettop(L)-top, n);
   if (n) {    
     lua_createtable(L, n, 0); /* create subs table */     
     lua_insert(L, top+1);    /* move subs table to below the subs */     
@@ -735,11 +732,11 @@ int r_pushmatch(lua_State *L, rBuffer *buf, const char **s, const char **e) {
     lua_rawset(L, -3);		/* match["subs"] = subs table */    
   }    
 
-  intp = (int)**s;
-  (*s) += sizeof(int);
+  intp = (int *)*s;
   lua_pushliteral(L, "e");  
-  lua_pushinteger(L, intp);  
+  lua_pushinteger(L, *intp);  
   lua_rawset(L, -3);		/* match["e"] = end position */  
+  (*s) += sizeof(int);
   /* leave match table on the stack */
   return 1;
 
@@ -788,7 +785,8 @@ static int json_Fullcapture(CapState *cs, rBuffer *buf, int count) {
   json_encode_pos(cs->L, s, buf);
   r_addstring(cs->L, buf, ",\"type\":\"");
   json_encode_name(cs, buf);
-  r_addstring(cs->L, buf, "\",\"subs\":[],\"e\":");
+  /* r_addstring(cs->L, buf, "\",\"subs\":[],\"e\":"); */
+  r_addstring(cs->L, buf, "\",\"e\":");
   e = s + c->siz - 1;		/* length */
   json_encode_pos(cs->L, e, buf);
   r_addstring(cs->L, buf, "}");
@@ -799,7 +797,7 @@ static int json_Close(CapState *cs, rBuffer *buf, int count) {
   size_t e;
   if (!cs->cap->kind==Cclose) return ROSIE_CLOSE_ERROR;
   e = cs->cap->s - cs->s + 1;	/* 1-based end position */
-  r_addstring(cs->L, buf, "]");
+  if (!isopencap(cs->cap-1)) r_addstring(cs->L, buf, "]");
   r_addstring(cs->L, buf, ",\"e\":");
   json_encode_pos(cs->L, e, buf);
   r_addstring(cs->L, buf, "}");
@@ -815,7 +813,8 @@ static int json_Open(CapState *cs, rBuffer *buf, int count) {
   json_encode_pos(cs->L, s, buf);
   r_addstring(cs->L, buf, ",\"type\":\"");
   json_encode_name(cs, buf);
-  r_addstring(cs->L, buf, "\",\"subs\":[");
+  if (isclosecap(cs->cap+1)) {r_addstring(cs->L, buf, "\"");}
+  else {r_addstring(cs->L, buf, "\",\"subs\":[");}
   return ROSIE_OK;
 }
 
