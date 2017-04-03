@@ -860,8 +860,10 @@ static int lp_matchtime (lua_State *L) {
 
 /* rosie capture */
 static int r_capture (lua_State *L) {
-     luaL_checkstring(L, 2);	/* match name */
-     return capture_aux(L, Crosiecap, 2);
+  size_t len;
+  luaL_checklstring(L, 2, &len); /* match name */
+  if (len > SHRT_MAX) luaL_error(L, "capture name too long");
+  return capture_aux(L, Crosiecap, 2);
 }
 
 
@@ -1196,6 +1198,7 @@ int r_match (lua_State *L) {
   p = (getpatt(L, 1, NULL), getpattern(L, 1));
   code = (p->code != NULL) ? p->code : prepcompile(L, p, 1);
   s = luaL_checklstring(L, SUBJIDX, &l);
+  if (l > INT_MAX) luaL_error(L, "input string too long");
   i = initposition(L, l, SUBJIDX+1);
   encoding = luaL_optinteger(L, SUBJIDX+2, 0);
   duration0 = luaL_optinteger(L, SUBJIDX+3, 0);	/* total time accumulator */

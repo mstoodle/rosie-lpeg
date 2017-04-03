@@ -6,6 +6,9 @@
 /*  LICENSE: MIT License (https://opensource.org/licenses/mit-license.html)  */
 /*  AUTHOR: Jamie A. Jennings                                                */
 
+#if !defined(rbuf_h)
+#define rbuf_h
+
 #define ROSIE_BUFFER "ROSIE_BUFFER"
 #define R_BUFFERSIZE 4096	  /* TODO: experiment with a smaller value? */
 
@@ -31,6 +34,8 @@ rBuffer *r_newbuffer (lua_State *L);
 /* the functions below DO NOT use the stack */
 char *r_prepbuffsize (lua_State *L, rBuffer *buf, size_t sz);
 void r_addlstring (lua_State *L, rBuffer *buf, const char *s, size_t l);
+
 #define r_addstring(L, buf, s) (r_addlstring)((L), (buf), (s), strlen(s));
 #define r_addchar(L, buf, c) (r_addlstring)((L), (buf), &(c), sizeof(char));
 
+#endif
