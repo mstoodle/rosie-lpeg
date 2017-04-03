@@ -639,15 +639,22 @@ static int debug_Open(CapState *cs, rBuffer *buf, int count) {
   return ROSIE_OK;
 }
 
+/* The byte array encoding assumes that the input text length fits
+   into 2^31, i.e. a signed int, and that the name length fits into
+   2^15, i.e. a signed short.  It is the responsibility of rmatch to
+   ensure this. */
+
 static void encode_pos(lua_State *L, size_t pos, int negate, rBuffer *buf) {
   int intpos = (int) pos;
   if (negate) intpos = - intpos;
   r_addlstring(L, buf, (const char *)&intpos, sizeof(int));
 }
 
-static void encode_string(lua_State *L, const char *str, size_t len, rBuffer *buf) {
+static void encode_string(lua_State *L, const char *str, size_t len, byte shortflag, rBuffer *buf) {
   int intlen = (int) len; 
-  r_addlstring(L, buf, (const char *)&intlen, sizeof(int)); 
+  short shortlen = (short) len;
+  int size = (shortflag ? sizeof(short) : sizeof(int));
+  r_addlstring(L, buf, (const char *) (shortflag ? &shortlen : &intlen), size); 
   r_addlstring(L, buf, str, len); 
 }
 
@@ -656,7 +663,7 @@ static void encode_name(CapState *cs, rBuffer *buf) {
   size_t len;
   lua_rawgeti(cs->L, ktableidx(cs->ptop), cs->cap->idx); 
   name = lua_tolstring(cs->L, -1, &len); 
-  encode_string(cs->L, name, len, buf);
+  encode_string(cs->L, name, len, 1, buf); /* short */
   lua_pop(cs->L, 1); 
 }
 
@@ -693,8 +700,9 @@ static int byte_Open(CapState *cs, rBuffer *buf, int count) {
 int r_pushmatch(lua_State *L, rBuffer *buf, const char **s, const char **e);
 int r_pushmatch(lua_State *L, rBuffer *buf, const char **s, const char **e) {
   int i, top;
+  const short *shortp;
   int n = 0;
-  int *intp = (int *)*s;
+  const int *intp = (const int *)*s;
   (*s) += sizeof(int);
   if (*s > *e) luaL_error(L, "corrupt match data (buffer overrun)");
   if ((*intp) > 0) luaL_error(L, "corrupt match data (expected start marker)");
@@ -704,19 +712,19 @@ int r_pushmatch(lua_State *L, rBuffer *buf, const char **s, const char **e) {
   lua_pushinteger(L, -(*intp)); 
   lua_rawset(L, -3);		/* match["s"] = start position */ 
 
-  intp = (int *)*s;		/* length of name string */
-  (*s) += sizeof(int);
-  if (*intp < 0) luaL_error(L, "corrupt match data (expected length of name)");
+  shortp = (const short *)*s;		/* length of name string */
+  (*s) += sizeof(short);
+  if (*shortp < 0) luaL_error(L, "corrupt match data (expected length of name)");
 
   lua_pushliteral(L, "type"); 
-  lua_pushlstring(L, *s, *intp);	
+  lua_pushlstring(L, *s, *shortp);	
   lua_rawset(L, -3);		/* match["type"] = name */ 
   
-  (*s) += *intp;			/* advance to first char after name */
+  (*s) += *shortp;			/* advance to first char after name */
 
   /* process subs, if any */
   top = lua_gettop(L);
-  while (*(int *)*s < 0) {
+  while (*(const int *)*s < 0) {
     i = r_pushmatch(L, buf, s, e);
     n += i;
   } 
@@ -732,7 +740,7 @@ int r_pushmatch(lua_State *L, rBuffer *buf, const char **s, const char **e) {
     lua_rawset(L, -3);		/* match["subs"] = subs table */    
   }    
 
-  intp = (int *)*s;
+  intp = (const int *)*s;
   lua_pushliteral(L, "e");  
   lua_pushinteger(L, *intp);  
   lua_rawset(L, -3);		/* match["e"] = end position */  

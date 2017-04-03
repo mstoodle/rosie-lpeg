@@ -133,17 +133,17 @@ subheading("Captures using indices")
 
 s = bar:rmatch("kX7 3 2X1 8abcdef", 1, 0, 0, 0)	    
 check(type(s)=="userdata")
-check(#s==132)
+check(#s==116)
 check_table(lpeg.decode(s), "bar", 2, 15, 2)
 
 s = bar:rmatch("kX7 X1 8 X9 X101 102 103 104abcdef", 1, 0, 0, 0) 
 check(type(s)=="userdata")
-check(#s==264)
+check(#s==232)
 check_table(lpeg.decode(s), "bar", 2, 32, 4)
 
 s = bar:rmatch("kX X Xabcdef", 1, 0, 0, 0) 
 check(type(s)=="userdata")
-check(#s==153)
+check(#s==135)
 check_table(lpeg.decode(s), "bar", 2, 10, 3)
 for i,v in ipairs(t.subs) do
    check_table(v, "foo", nil, nil, 0)
@@ -158,33 +158,25 @@ bar = lpeg.P(1) * lpeg.rcap(((lpeg.P"X" * foos)^1) * lpeg.P"abc", "bar")
 
 s = bar:rmatch("kX7 3 2X1 8abcdef", 1, 0, 0, 0) 
 check(type(s)=="userdata")
-check(#s==90)
--- check(t.s==2)
--- check(t.e==15)
--- check(#t.subs==5)
--- for i,v in ipairs(t.subs) do
---    check_table(v, "foo");
---    check(not v.subs)
--- end
+check(#s==78)
+check_table(lpeg.decode(s), "bar", 2, 15, 5)
+for i,v in ipairs(t.subs) do
+   check_table(v, "foo", nil, nil, 0);
+end
 
 s = bar:rmatch("kX7 X1 8 X9 X101 102 103 104abcdef", 1, 0, 0, 0)
 check(type(s)=="userdata")
-check(#s==180)
--- check(t.s==2)
--- check(t.e==32)
--- check(#t.subs==11)
--- for i,v in ipairs(t.subs) do
---       check_table(v, "foo")
---       check(not v.subs)
--- end
+check(#s==156)
+check_table(lpeg.decode(s), "bar", 2, 32, 11)
+for i,v in ipairs(t.subs) do
+      check_table(v, "foo", nil, nil, 0)
+end
 
 s, err = bar:rmatch("kXabcdef", 1, 0, 0, 0)
 check(type(s)=="userdata")
-check(#s==30)
--- check(t.s==2)
--- check(t.e==6)
--- check(#t.subs==1)
--- check(t.subs[1].s==t.subs[1].e)
+check(#s==26)
+check_table(lpeg.decode(s), "bar", 2, 6, 1)
+check(t.subs[1].s==t.subs[1].e)
 
 heading("Long patterns") -- these generate an open/close instead of a full capture
 txt = string.rep("abcdefghij", 30)
