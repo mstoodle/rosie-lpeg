@@ -521,7 +521,7 @@ int getcaptures (lua_State *L, const char *s, const char *r, int ptop) {
     cs.s = s; cs.valuecached = 0; cs.ptop = ptop;
     do {  /* collect their values */
       i = pushcapture(&cs);
-      if (i<0) { lua_pushnil(L); lua_pushstring(L, "invalid capture type"); return 2; }
+      if (i<0) luaL_error(L, "invalid capture type");
       n += i;
     } while (!isclosecap(cs.cap));
   }

@@ -200,10 +200,10 @@ foos = lpeg.rcap((foo * (lpeg.P" " * foo)^0), "many foos")
 
 subheading("Accidental use of match instead of rmatch")
 
-s, last = foos:match("123 4 567890")
-check(type(s)=="nil")
-check(type(last)=="string")
-check(last:find("invalid capture type"))
+ok, s, last = pcall(foos.match, foos, "123 4 567890")
+check(not ok)
+check(type(s)=="string")
+check(s:find("invalid capture type"))
 
 
 subheading("Match types other than Crosiecap when using rmatch")
