@@ -622,6 +622,15 @@ static int caploop(CapState *cs, encoder_functions *encode, rBuffer *buf, int co
   return ROSIE_OK;
 }
 
+static const char *r_status_messages[] = {
+  "ok",
+  "open capture error in rosie match",
+  "close capture error in rosie match",
+  "full capture error in rosie match"
+};
+
+#define n_messages ((int) ((sizeof r_status_messages) / sizeof (const char *)))
+
 int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int etype) {
   int err;
   encoder_functions encode;
@@ -647,7 +656,8 @@ int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int etyp
     else err = caploop(&cs, &encode, buf, 0);
     if (err) {
       lua_pushnil(L);
-      lua_pushinteger(L, err);
+      if ((err < 0) || (err > n_messages)) lua_pushstring(L, "in rosie match, unspecified error");
+      else lua_pushstring(L, r_status_messages[err]);
       return 2;
     }
   }

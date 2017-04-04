@@ -215,20 +215,71 @@ s, last = foos:rmatch("123 4 567890")
 check(type(s)=="userdata")
 check(type(last)=="number")
 
-function check_error(pat, input, err)
+function check_error(pat, input, msg)
    s, last = pat:rmatch(input)
    check(type(s)=="nil", nil, 1)
-   check(type(last)=="number", nil, 1)
-   if type(last)=="number" then
-      check(last==err, "unexpected error code: " .. tostring(last), 1)
-   end
+   check(type(last)=="string", nil, 1)
+   check(last:find(msg), "unexpected error message: " .. tostring(last), 1)
 end
 
 foos = lpeg.rcap((foo * (lpeg.P" " * lpeg.Cc("PROBLEM") * foo)^0), "many foos")
-check_error(foos, "123 4 567890", 4)		    -- ROSIE_FULLCAP_ERROR
+check_error(foos, "123 4 567890", "full capture error")
 
 foos = (foo * (lpeg.P" " * lpeg.Cc("PROBLEM") * foo)^0)
-check_error(foos, "123 4 567890", 1)		    -- ROSIE_OPEN_ERROR
+check_error(foos, "123 4 567890", "open capture error")
+
+
+heading("Grammars")
+
+-- Equal numbers of a's and b's
+equalcount = lpeg.C(lpeg.P{
+  "S";   -- initial rule name
+  S = "a" * lpeg.V"B" + "b" * lpeg.V"A" + "",
+  A = "a" * lpeg.V"S" + "b" * lpeg.V"A" * lpeg.V"A",
+  B = "b" * lpeg.V"S" + "a" * lpeg.V"B" * lpeg.V"B",
+} * -1) * lpeg.Cp()
+
+bal = "aabb"
+s, n = equalcount:match(bal)
+check(n==5, "grammar without using rosie lpeg extensions")
+check(s==bal)
+
+-- Entire grammar inside rcap
+equalcount = lpeg.rcap(
+   lpeg.P{
+      "S";   -- initial rule name
+      S = "a" * lpeg.V"B" + "b" * lpeg.V"A" + "",
+      A = "a" * lpeg.V"S" + "b" * lpeg.V"A" * lpeg.V"A",
+      B = "b" * lpeg.V"S" + "a" * lpeg.V"B" * lpeg.V"B",
+   } * -1,
+   "S")
+
+s, n = equalcount:rmatch(bal)
+check(type(s)=="userdata")
+t = lpeg.decode(s)
+check_table(t, "S", 1, 5)
+
+equalcount = 
+   lpeg.P{
+      "S";   -- initial rule name
+      S = lpeg.rcap("a" * lpeg.V"B" + "b" * lpeg.V"A" + "", "S"),
+      A = lpeg.rcap("a" * lpeg.V"S" + "b" * lpeg.V"A" * lpeg.V"A", "A"),
+      B = lpeg.rcap("b" * lpeg.V"S" + "a" * lpeg.V"B" * lpeg.V"B", "B")
+   } * -1
+
+
+s, n = equalcount:rmatch(bal)
+check(type(s)=="userdata")
+t = lpeg.decode(s)
+check_table(t, "S", 1, 5, 1)
+check_table(t.subs[1], "B", 2, 5, 2)
+
+bal = "baab"
+s, n = equalcount:rmatch(bal)
+t = lpeg.decode(s)
+check_table(t, "S", 1, 5, 1)
+check_table(t.subs[1], "A", 2, 5, 1)
+
 
 test.finish()
 

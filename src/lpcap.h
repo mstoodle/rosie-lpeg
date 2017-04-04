@@ -53,8 +53,8 @@ typedef struct {
  
 typedef enum r_status { 
      /* OK must be first so that its value is 0 */ 
-     ROSIE_OK, ROSIE_OPEN_ERROR, ROSIE_CLOSE_ERROR, ROSIE_SIZ_ERROR, ROSIE_FULLCAP_ERROR
-} r_status; 
+     ROSIE_OK, ROSIE_OPEN_ERROR, ROSIE_CLOSE_ERROR, ROSIE_FULLCAP_ERROR
+} r_status;
 
 int r_match (lua_State *L);
 int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int encoding);
