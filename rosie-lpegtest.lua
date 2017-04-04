@@ -211,15 +211,16 @@ subheading("Match types other than Crosiecap when using rmatch")
 -- First check that these patterns work, before we introduce an error
 foo = lpeg.rcap((lpeg.R("09")^0), "foo")
 foos = lpeg.rcap((foo * (lpeg.P" " * foo)^0), "many foos")
-s, last = foos:rmatch("123 4 567890")
+ok, s, last = pcall(foos.rmatch, foos, "123 4 567890")
+check(ok)
 check(type(s)=="userdata")
 check(type(last)=="number")
 
 function check_error(pat, input, msg)
-   s, last = pat:rmatch(input)
-   check(type(s)=="nil", nil, 1)
-   check(type(last)=="string", nil, 1)
-   check(last:find(msg), "unexpected error message: " .. tostring(last), 1)
+   ok, s, last = pcall(pat.rmatch, pat, input)
+   check(not ok)
+   check(type(s)=="string", nil, 1)
+   check(s:find(msg), "unexpected error message: " .. tostring(s), 1)
 end
 
 foos = lpeg.rcap((foo * (lpeg.P" " * lpeg.Cc("PROBLEM") * foo)^0), "many foos")
@@ -227,6 +228,7 @@ check_error(foos, "123 4 567890", "full capture error")
 
 foos = (foo * (lpeg.P" " * lpeg.Cc("PROBLEM") * foo)^0)
 check_error(foos, "123 4 567890", "open capture error")
+
 
 
 heading("Grammars")

@@ -655,10 +655,8 @@ int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int etyp
     }
     else err = caploop(&cs, &encode, buf, 0);
     if (err) {
-      lua_pushnil(L);
-      if ((err < 0) || (err > n_messages)) lua_pushstring(L, "in rosie match, unspecified error");
-      else lua_pushstring(L, r_status_messages[err]);
-      return 2;
+      if ((err < 0) || (err > n_messages)) luaL_error(L, "in rosie match, unspecified error");
+      else luaL_error(L, r_status_messages[err]);
     }
   }
   lua_pushinteger(L, r - s + 1); /* last position */
