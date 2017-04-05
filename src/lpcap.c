@@ -521,7 +521,7 @@ int getcaptures (lua_State *L, const char *s, const char *r, int ptop) {
     cs.s = s; cs.valuecached = 0; cs.ptop = ptop;
     do {  /* collect their values */
       i = pushcapture(&cs);
-      if (i<0) luaL_error(L, "invalid capture type");
+      if (i<0) return luaL_error(L, "invalid capture type");
       n += i;
     } while (!isclosecap(cs.cap));
   }
@@ -532,36 +532,41 @@ int getcaptures (lua_State *L, const char *s, const char *r, int ptop) {
   return n;
 }
 
+#define check_bounds(s,e) if (*(s) > *(e)) luaL_error(L, "corrupt match data (buffer overrun)");
+#define peek_int(s) (*(const int *)*(s))
+#define read_int(ptr, s) { ptr = (const int *)*(s); *(s) += sizeof(int); check_bounds((s), (e));}
+#define read_short(ptr, s) { ptr = (const short *)*(s); *(s) += sizeof(short); check_bounds((s), (e));}
+
 /* Rosie extensions */
-void r_pushmatch(lua_State *L, rBuffer *buf, const char **s, const char **e);
-void r_pushmatch(lua_State *L, rBuffer *buf, const char **s, const char **e) {
+void r_pushmatch(lua_State *L, const char **s, const char **e, int depth);
+void r_pushmatch(lua_State *L, const char **s, const char **e, int depth) {
   int top;
   const short *shortp;
+  const int *intp;
   int n = 0;
-  const int *intp = (const int *)*s;
-  (*s) += sizeof(int);
-  if (*s > *e) luaL_error(L, "corrupt match data (buffer overrun)");
+  read_int(intp, s);
   if ((*intp) > 0) luaL_error(L, "corrupt match data (expected start marker)");
 
+  lua_checkstack(L, 4);	/* match table, key, value, plus one for luaL_error */
   lua_createtable(L, 0, 5);	/* create match table */ 
   lua_pushliteral(L, "s"); 
   lua_pushinteger(L, -(*intp)); 
   lua_rawset(L, -3);		/* match["s"] = start position */ 
 
-  shortp = (const short *)*s;		/* length of name string */
-  (*s) += sizeof(short);
+  read_short(shortp, s);	/* length of name string */
   if (*shortp < 0) luaL_error(L, "corrupt match data (expected length of name)");
 
   lua_pushliteral(L, "type"); 
-  lua_pushlstring(L, *s, *shortp);	
+  lua_pushlstring(L, *s, (size_t) *shortp);	
   lua_rawset(L, -3);		/* match["type"] = name */ 
-  
-  (*s) += *shortp;			/* advance to first char after name */
+
+  (*s) += *shortp;		/* advance to first char after name */
+  check_bounds(s, e);
 
   /* process subs, if any */
   top = lua_gettop(L);
-  while (*(const int *)*s < 0) {
-    r_pushmatch(L, buf, s, e);
+  while (peek_int(s) < 0) {
+    r_pushmatch(L, s, e, depth++);
     n++;
   } 
   
@@ -576,19 +581,20 @@ void r_pushmatch(lua_State *L, rBuffer *buf, const char **s, const char **e) {
     lua_rawset(L, -3);		/* match["subs"] = subs table */    
   }    
 
-  intp = (const int *)*s;
+  read_int(intp, s);
   lua_pushliteral(L, "e");  
   lua_pushinteger(L, *intp);  
   lua_rawset(L, -3);		/* match["e"] = end position */  
-  (*s) += sizeof(int);
+  check_bounds(s, e);
+
   /* leave match table on the stack */
 }
   
 int r_lua_decode (lua_State *L) {
-  rBuffer *buf = (rBuffer *)luaL_checkudata(L, 1, ROSIE_BUFFER);
-  const char *s = buf->data;	/* start of data */
-  const char *e = buf->data + buf->n; /* end of data */
-  r_pushmatch(L, buf, &s, &e);
+  rBuffer *buf = (rBuffer *)luaL_checkudata(L, 1, ROSIE_BUFFER); 
+  const char *s = buf->data;	/* start of data */ 
+  const char *e = buf->data + buf->n; /* end of data */ 
+  r_pushmatch(L, &s, &e, 0);
   return 1;
 }
 
@@ -652,8 +658,12 @@ int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int etyp
     }
     else err = caploop(&cs, &encode, buf, 0);
     if (err) {
-      if ((err < 0) || (err > n_messages)) luaL_error(L, "in rosie match, unspecified error");
-      else luaL_error(L, r_status_messages[err]);
+
+#ifdef ROSIE_DEBUG
+      printf("*** caploop returned an error: %d\n", err); fflush(NULL);
+#endif 
+      if ((err < 0) || (err > n_messages)) return luaL_error(L, "in rosie match, unspecified error");
+      else return luaL_error(L, r_status_messages[err]);
     }
   }
   lua_pushinteger(L, r - s + 1); /* last position */

@@ -21,10 +21,8 @@
 /* returns pointer to start of new buffer */
 static void *resizebuf (lua_State *L, rBuffer *buf, size_t newsize) {
   void *temp;
-  if (newsize==0) { printf("### BAD THING: newsize is zero\n"); fflush(NULL); }
   temp = realloc((void *)buf->data, (newsize * sizeof(char)));
   if (temp == NULL) {
-    printf("### BAD THING: TEMP==NULL!\n") ; fflush(NULL);
     free(buf->data);
     buf->data = NULL; buf->capacity=0; buf->n=0;
     luaL_error(L, "not enough memory for buffer expansion");
@@ -45,10 +43,8 @@ static void *resizebuf (lua_State *L, rBuffer *buf, size_t newsize) {
 
 /* returns a pointer to a free area with at least 'sz' bytes */
 char *r_prepbuffsize (lua_State *L, rBuffer *B, size_t sz) {
-  char *newbuff;
   if (B->capacity - B->n < sz) {
-    /* size_t newsize = B->capacity * 2; /\* double buffer size *\/ */
-    size_t newsize = B->capacity * 20; /* TEMPORARY! */
+    size_t newsize = B->capacity * 2; /* double buffer size */ 
 
 #ifdef ROSIE_DEBUG
     fprintf(stderr, "*** not enough space for rbuffer %p (%ld/%ld %s): open capacity is %ld, looking for %ld\n", 
@@ -58,19 +54,14 @@ char *r_prepbuffsize (lua_State *L, rBuffer *B, size_t sz) {
     if (newsize - B->n < sz) newsize = B->n + sz; /* not big enough? */
     if (newsize < B->n || newsize - B->n < sz) luaL_error(L, "buffer too large");
     /* else create larger buffer */
-    if (buffisdynamic(B)) {
-      if (B->data == B->initb) { printf("######### BAD THING 3\n"); fflush(NULL); }
-      resizebuf(L, B, newsize);
-    }      
-    else {  /* all data currently still in initb, i.e. no malloc'd storage */
-      if (B->data != B->initb) { printf("######### BAD THING 1\n"); fflush(NULL); }
+    if (buffisdynamic(B)) resizebuf(L, B, newsize);
+    else {
+      /* all data currently still in initb, i.e. no malloc'd storage */
       B->data = NULL; 		/* force an allocation */
       resizebuf(L, B, newsize);
-      if (B->data == B->initb) { printf("######### BAD THING 2\n"); fflush(NULL); }
       memcpy(B->data, B->initb, B->n * sizeof(char));  /* copy original content */
     }
   }
-  if (&B->data[B->n] > (B->data + B->capacity)) { printf("######### BAD THING 4\n"); fflush(NULL); }
   return &B->data[B->n];
 }
 

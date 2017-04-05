@@ -133,10 +133,16 @@ static void encode_pos(lua_State *L, size_t pos, int negate, rBuffer *buf) {
 }
 
 static void encode_string(lua_State *L, const char *str, size_t len, byte shortflag, rBuffer *buf) {
-  int intlen = (int) len; 
-  short shortlen = (short) len;
-  int size = (shortflag ? sizeof(short) : sizeof(int));
-  r_addlstring(L, buf, (const char *) (shortflag ? &shortlen : &intlen), size); 
+  /* encode size as a short or an int */
+  if (shortflag) {
+    short shortlen = (short) len;
+    r_addlstring(L, buf, (const char *) &shortlen, sizeof(short));
+  }
+  else {
+    int intlen = (int) len; 
+    r_addlstring(L, buf, (const char *) &intlen, sizeof(int));
+  }
+  /* encode the string by copying it into the buffer */
   r_addlstring(L, buf, str, len); 
 }
 
@@ -145,8 +151,8 @@ static void encode_name(CapState *cs, rBuffer *buf) {
   size_t len;
   lua_rawgeti(cs->L, ktableidx(cs->ptop), cs->cap->idx); 
   name = lua_tolstring(cs->L, -1, &len); 
-  encode_string(cs->L, name, len, 1, buf); /* short */
-  lua_pop(cs->L, 1); 
+  encode_string(cs->L, name, len, 1, buf); /* shortflag is set */
+  lua_pop(cs->L, 1);			   /* pop name */
 }
 
 int byte_Fullcapture(CapState *cs, rBuffer *buf, int count) {
@@ -155,7 +161,7 @@ int byte_Fullcapture(CapState *cs, rBuffer *buf, int count) {
   if (!isfullcap(c) || (c->kind != Crosiecap)) return ROSIE_FULLCAP_ERROR;
   s = c->s - cs->s + 1;		/* 1-based start position */
   e = s + c->siz - 1;
-  encode_pos(cs->L, s, 1, buf);
+  encode_pos(cs->L, s, 1, buf);	/* negative flag is set */
   encode_name(cs, buf);
   encode_pos(cs->L, e, 0, buf);
   return ROSIE_OK;
