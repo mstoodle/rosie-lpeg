@@ -20,18 +20,23 @@
 /* dynamically allocate storage to replace initb when initb becomes too small */
 /* returns pointer to start of new buffer */
 static void *resizebuf (lua_State *L, rBuffer *buf, size_t newsize) {
-  void *ud;
-  lua_Alloc allocf = lua_getallocf(L, &ud);
-  void *temp = allocf(ud, buf->data, buf->capacity, newsize);
-  if (temp == NULL && newsize > 0) {  /* allocation error? */
-    resizebuf(L, buf, 0);  /* free buffer */
-    luaL_error(L, "not enough memory for dynamic buffer expansion");
+  void *temp;
+  if (newsize==0) { printf("### BAD THING: newsize is zero\n"); fflush(NULL); }
+  temp = realloc((void *)buf->data, (newsize * sizeof(char)));
+  if (temp == NULL) {
+    printf("### BAD THING: TEMP==NULL!\n") ; fflush(NULL);
+    free(buf->data);
+    buf->data = NULL; buf->capacity=0; buf->n=0;
+    luaL_error(L, "not enough memory for buffer expansion");
   }
+#ifdef ROSIE_DEBUG
+  if (buf->data) fprintf(stderr, "*** resized rbuffer %p to new capacity %ld\n", (void *)buf, newsize);
+  else fprintf(stderr, "*** allocated rbuffer %p with capacity %ld\n", (void *)buf, newsize);
+  if (buf->data != temp) fprintf(stderr, "*** buf->data changed from %p to %p\n", (void *)buf->data, temp);
+  fflush(NULL);
+#endif
   buf->data = temp;
   buf->capacity = newsize;
-#ifdef ROSIE_DEBUG
-  printf("*** resized to new capacity: %ld\n", newsize);
-#endif
   return temp;
 }
 
@@ -41,24 +46,31 @@ static void *resizebuf (lua_State *L, rBuffer *buf, size_t newsize) {
 /* returns a pointer to a free area with at least 'sz' bytes */
 char *r_prepbuffsize (lua_State *L, rBuffer *B, size_t sz) {
   char *newbuff;
-  if (B->capacity - B->n < sz) {  /* not enough space? */
-    size_t newsize = B->capacity * 2; /* double buffer size */
+  if (B->capacity - B->n < sz) {
+    /* size_t newsize = B->capacity * 2; /\* double buffer size *\/ */
+    size_t newsize = B->capacity * 20; /* TEMPORARY! */
+
 #ifdef ROSIE_DEBUG
-    printf("*** not enough dynamic space: open capacity is %ld, looking for %ld\n", 
-	   B->capacity - B->n, sz);
+    fprintf(stderr, "*** not enough space for rbuffer %p (%ld/%ld %s): open capacity is %ld, looking for %ld\n", 
+	    (void *)B, B->n, B->capacity, (buffisdynamic(B) ? "DYNAMIC" : "STATIC"), B->capacity - B->n, sz);
 #endif
+
     if (newsize - B->n < sz) newsize = B->n + sz; /* not big enough? */
     if (newsize < B->n || newsize - B->n < sz) luaL_error(L, "buffer too large");
     /* else create larger buffer */
-    if (B->data != B->initb) newbuff = (char *)resizebuf(L, B, newsize);
+    if (buffisdynamic(B)) {
+      if (B->data == B->initb) { printf("######### BAD THING 3\n"); fflush(NULL); }
+      resizebuf(L, B, newsize);
+    }      
     else {  /* all data currently still in initb, i.e. no malloc'd storage */
-      newbuff = (char *)malloc(newsize * sizeof(char));
-      if (newbuff == NULL) luaL_error(L, "not enough memory to expand static buffer");
-      memcpy(newbuff, B->data, B->n * sizeof(char));  /* copy original content */
+      if (B->data != B->initb) { printf("######### BAD THING 1\n"); fflush(NULL); }
+      B->data = NULL; 		/* force an allocation */
+      resizebuf(L, B, newsize);
+      if (B->data == B->initb) { printf("######### BAD THING 2\n"); fflush(NULL); }
+      memcpy(B->data, B->initb, B->n * sizeof(char));  /* copy original content */
     }
-    B->data = newbuff;
-    B->capacity = newsize;
   }
+  if (&B->data[B->n] > (B->data + B->capacity)) { printf("######### BAD THING 4\n"); fflush(NULL); }
   return &B->data[B->n];
 }
 
@@ -66,8 +78,13 @@ char *r_prepbuffsize (lua_State *L, rBuffer *B, size_t sz) {
 
 static int buffgc (lua_State *L) {
   /* top of stack is 'self' for gc metamethod */
-  rBuffer *buf = (rBuffer *)luaL_checkudata(L, 1, ROSIE_BUFFER);
-  if (buffisdynamic(buf)) resizebuf(L, buf, 0);
+  rBuffer *buf = (rBuffer *)lua_touserdata(L, 1);
+  if (buffisdynamic(buf)) { 
+#ifdef ROSIE_DEBUG 
+  fprintf(stderr, "*** freeing rbuffer->data %p (capacity was %ld)\n", (void *)(buf->data), buf->capacity); 
+#endif 
+  free((void *)buf->data);	/* free dynamically allocated data */ 
+  } 
   return 0;
 }
 
@@ -79,7 +96,7 @@ static int buffsize (lua_State *L) {
 
 rBuffer *r_newbuffer (lua_State *L) {
   rBuffer *buf = (rBuffer *)lua_newuserdata(L, sizeof(rBuffer));
-  buf->data = buf->initb;		/* intially, data storage is statically allocated in initb  */
+  buf->data = buf->initb;       /* intially, data storage is statically allocated in initb  */
   buf->n = 0;			/* contents length is 0 */
   buf->capacity = R_BUFFERSIZE;	/* size of initb */
   if (luaL_newmetatable(L, ROSIE_BUFFER)) {
@@ -89,8 +106,8 @@ rBuffer *r_newbuffer (lua_State *L) {
        otherwise: 
          puts the ROSIE_BUFFER entry from the registry on the stack; 
     */ 
-    lua_pushcfunction(L, buffgc); 
-    lua_setfield(L, -2, "__gc"); 
+    lua_pushcfunction(L, buffgc);  
+    lua_setfield(L, -2, "__gc");  
     lua_pushcfunction(L, buffsize); 
     lua_setfield(L, -2, "__len"); 
   }
@@ -100,8 +117,8 @@ rBuffer *r_newbuffer (lua_State *L) {
 }
 
 void r_addlstring (lua_State *L, rBuffer *buf, const char *s, size_t l) {
-  if (l > 0) {		     /* avoid 'memcpy' when 's' can be NULL */
-    char *b = r_prepbuffsize(L, buf, l);
+  if (l > 0) {		     /* noop when 's' is an empty string */
+    char *b = r_prepbuffsize(L, buf, l * sizeof(char));
     memcpy(b, s, l * sizeof(char));
     addsize(buf, l);
   }
@@ -124,6 +141,5 @@ int r_lua_add (lua_State *L) {
   rBuffer *buf = (rBuffer *)luaL_checkudata(L, 1, ROSIE_BUFFER);
   s = lua_tolstring(L, 2, &len);
   r_addlstring(L, buf, s, len);
-  lua_pushvalue(L, 1);		/* return the buffer itself */
-  return 1;
+  return 0;
 }

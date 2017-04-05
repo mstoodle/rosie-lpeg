@@ -32,10 +32,28 @@ end
 
 heading("MISC")
 
+subheading("Check for valid encoding type (a number)")
 s, msg = bar:rmatch("kX7 3 2X1 8abcdef", 1, 99)
 check(type(s)=="nil")
 check(type(msg)=="string")
 if type(msg)=="string" then check(msg:find("invalid encoding")); end
+
+subheading("Create some large buffers that need extra action for gc")
+
+-- error will occur if the gc causes a segfault... need to investigate with valgrind on linux.
+for i=1,1 do
+   s, nextpos = bar:rmatch("kX7 3 2X1 8abcdef")
+   check(type(s)=="userdata")
+   check(#s>0)
+   for j = 1,100 do
+      lpeg.add(s, string.rep("x", 1000))
+   end
+   print("length of buffer: " .. tostring(#s))
+   s = nil
+   collectgarbage("collect")
+   collectgarbage("collect")
+end
+ 
 
 
 heading("JSON")

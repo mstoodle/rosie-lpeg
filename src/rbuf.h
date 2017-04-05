@@ -10,7 +10,7 @@
 #define rbuf_h
 
 #define ROSIE_BUFFER "ROSIE_BUFFER"
-#define R_BUFFERSIZE 4096	  /* TODO: experiment with a smaller value? */
+#define R_BUFFERSIZE (8192 * sizeof(char))	  /* should experiment with different values */
 
 /*
  * When the initial (statically allocated) buffer overflows, a new

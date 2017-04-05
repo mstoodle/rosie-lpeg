@@ -59,13 +59,13 @@ int debug_Open(CapState *cs, rBuffer *buf, int count) {
 /* Signed 32-bit integers: from −2,147,483,648 to 2,147,483,647  */
 #define MAXNUMBER2STR 16
 #define INT_FMT "%d"
-#define r_tostring(s, max, i) (snprintf((s), (max), (INT_FMT), (i)))
+#define r_inttostring(s, i) (snprintf((s), (MAXNUMBER2STR), (INT_FMT), (i)))
 #define isopencap(cap)	((captype(cap) != Cclose) && ((cap)->siz == 0))
 
 static void json_encode_pos(lua_State *L, size_t pos, rBuffer *buf) {
   char numbuff[MAXNUMBER2STR];
   size_t len;
-  len = r_tostring(numbuff, MAXNUMBER2STR, (int) pos);
+  len = r_inttostring(numbuff, (int) pos);
   r_addlstring(L, buf, numbuff, len);
 }
 

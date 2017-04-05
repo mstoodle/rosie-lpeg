@@ -533,9 +533,9 @@ int getcaptures (lua_State *L, const char *s, const char *r, int ptop) {
 }
 
 /* Rosie extensions */
-int r_pushmatch(lua_State *L, rBuffer *buf, const char **s, const char **e);
-int r_pushmatch(lua_State *L, rBuffer *buf, const char **s, const char **e) {
-  int i, top;
+void r_pushmatch(lua_State *L, rBuffer *buf, const char **s, const char **e);
+void r_pushmatch(lua_State *L, rBuffer *buf, const char **s, const char **e) {
+  int top;
   const short *shortp;
   int n = 0;
   const int *intp = (const int *)*s;
@@ -561,15 +561,15 @@ int r_pushmatch(lua_State *L, rBuffer *buf, const char **s, const char **e) {
   /* process subs, if any */
   top = lua_gettop(L);
   while (*(const int *)*s < 0) {
-    i = r_pushmatch(L, buf, s, e);
-    n += i;
+    r_pushmatch(L, buf, s, e);
+    n++;
   } 
   
   if (n) {    
     lua_createtable(L, n, 0); /* create subs table */     
     lua_insert(L, top+1);    /* move subs table to below the subs */     
     /* fill the subs table (lua_rawseti pops the value as well) */     
-    for (i=n; i>=1; i--) lua_rawseti(L, top+1, (lua_Integer) i);      
+    for (int i=n; i>=1; i--) lua_rawseti(L, top+1, (lua_Integer) i);      
     /* subs table now at top, below: match table */    
     lua_pushliteral(L, "subs");    
     lua_insert(L, -2);		/* move subs table to top of stack */
@@ -582,11 +582,8 @@ int r_pushmatch(lua_State *L, rBuffer *buf, const char **s, const char **e) {
   lua_rawset(L, -3);		/* match["e"] = end position */  
   (*s) += sizeof(int);
   /* leave match table on the stack */
-  return 1;
-
 }
   
-
 int r_lua_decode (lua_State *L) {
   rBuffer *buf = (rBuffer *)luaL_checkudata(L, 1, ROSIE_BUFFER);
   const char *s = buf->data;	/* start of data */
