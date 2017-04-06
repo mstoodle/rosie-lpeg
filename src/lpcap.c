@@ -8,7 +8,9 @@
 
 #include "lpcap.h"
 #include "lptypes.h"
+
 #include <string.h>
+#include <time.h>
 
 #include "rbuf.h"
 #include "rcap.h"
@@ -594,8 +596,11 @@ int r_lua_decode (lua_State *L) {
   rBuffer *buf = (rBuffer *)luaL_checkudata(L, 1, ROSIE_BUFFER); 
   const char *s = buf->data;	/* start of data */ 
   const char *e = buf->data + buf->n; /* end of data */ 
+  lua_Integer t0 = (lua_Integer) clock();
+  lua_Integer duration = luaL_optinteger(L, 2, 0); /* time accumulator */
   r_pushmatch(L, &s, &e, 0);
-  return 1;
+  lua_pushinteger(L, ((lua_Integer) clock()-t0)+duration); /* processing time */  
+  return 2;
 }
 
 encoder_functions debug_encoder = { debug_Open, debug_Fullcapture, debug_Close };

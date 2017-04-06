@@ -1186,7 +1186,7 @@ static int lp_match (lua_State *L) {
 int r_match (lua_State *L) {
   Capture capture[INITCAPSIZE];
   int n, encoding;
-  lua_Integer t0, tfin, duration0, duration1;
+  lua_Integer t0, tmatch, tfinal, duration0, duration1;
   const char *r;
   size_t l;
   Pattern *p;
@@ -1202,27 +1202,25 @@ int r_match (lua_State *L) {
   i = initposition(L, l, SUBJIDX+1);
   encoding = luaL_optinteger(L, SUBJIDX+2, 0);
   duration0 = luaL_optinteger(L, SUBJIDX+3, 0);	/* total time accumulator */
-  duration1 = luaL_optinteger(L, SUBJIDX+4, 0); /* time without post-processing */
+  duration1 = luaL_optinteger(L, SUBJIDX+4, 0); /* total time without post-processing */
   /* prepare for matching */
   ptop = lua_gettop(L);
   lua_pushnil(L);  /* initialize subscache */
   lua_pushlightuserdata(L, capture);  /* initialize caplistidx */
   lua_getuservalue(L, 1);  /* initialize penvidx */
   r = match(L, s, s + i, s + l, code, capture, ptop);
+  tmatch = (lua_Integer) clock();
   if (r == NULL) {
     lua_pushnil(L);
     lua_pushinteger(L, l);	/* leftover value is len */
-    tfin = (lua_Integer) clock();
-    lua_pushinteger(L, tfin-t0+duration0); /* new matching duration */
-    lua_pushinteger(L, duration1); /* no captures, so no change */
+    lua_pushinteger(L, (tmatch-t0)+duration0); /* total time (no capture processing) */
+    lua_pushinteger(L, (tmatch-t0)+duration1); /* match time (includes lpeg overhead) */
     return 4;
   }
-  tfin = (lua_Integer) clock();
-
   n = r_getcaptures(L, s, r, ptop, encoding);
-
-  lua_pushinteger(L, ((lua_Integer) clock())-tfin+duration1); /* total time */
-  lua_pushinteger(L, tfin-t0+duration0); /* lpeg vm time */
+  tfinal = (lua_Integer) clock();
+  lua_pushinteger(L, (tfinal-t0)+duration0); /* total time (includes capture processing) */
+  lua_pushinteger(L, (tmatch-t0)+duration1); /* match time (includes lpeg overhead) */
   return n+2;
 }
 
