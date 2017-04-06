@@ -13,6 +13,8 @@
 #include "rbuf.h"
 #include "rcap.h"
 
+#define UNUSED(x) (void)(x)
+
 static void print_capture(CapState *cs) {
   Capture *c = cs->cap;
   printf("  isfullcap? %s\n", isfullcap(c) ? "true" : "false");
@@ -35,6 +37,7 @@ int debug_Fullcapture(CapState *cs, rBuffer *buf, int count) {
   Capture *c = cs->cap;
   const char *start = c->s;
   const char *last = c->s + c->siz - 1;
+  UNUSED(buf); UNUSED(count);
   printf("Full capture:\n");
   print_capture(cs);
   if ((cs->cap->siz == 0) || (c->kind == Cclose)) return ROSIE_FULLCAP_ERROR;
@@ -43,6 +46,7 @@ int debug_Fullcapture(CapState *cs, rBuffer *buf, int count) {
 }
 
 int debug_Close(CapState *cs, rBuffer *buf, int count) {
+  UNUSED(buf); UNUSED(count);
   if (!cs->cap->kind==Cclose) return ROSIE_CLOSE_ERROR;
   printf("CLOSE:\n");
   print_capture(cs);
@@ -50,6 +54,7 @@ int debug_Close(CapState *cs, rBuffer *buf, int count) {
 }
 
 int debug_Open(CapState *cs, rBuffer *buf, int count) {
+  UNUSED(buf); UNUSED(count);
   if ((cs->cap->kind == Cclose) || (cs->cap->siz != 0)) return ROSIE_OPEN_ERROR;
   printf("OPEN:\n");
   print_capture(cs);
@@ -98,6 +103,7 @@ int json_Fullcapture(CapState *cs, rBuffer *buf, int count) {
 
 int json_Close(CapState *cs, rBuffer *buf, int count) {
   size_t e;
+  UNUSED(count);
   if (!cs->cap->kind==Cclose) return ROSIE_CLOSE_ERROR;
   e = cs->cap->s - cs->s + 1;	/* 1-based end position */
   if (!isopencap(cs->cap-1)) r_addstring(cs->L, buf, "]");
@@ -156,8 +162,9 @@ static void encode_name(CapState *cs, rBuffer *buf) {
 }
 
 int byte_Fullcapture(CapState *cs, rBuffer *buf, int count) {
-  Capture *c = cs->cap;
   size_t s, e;
+  Capture *c = cs->cap;
+  UNUSED(count);
   if (!isfullcap(c) || (c->kind != Crosiecap)) return ROSIE_FULLCAP_ERROR;
   s = c->s - cs->s + 1;		/* 1-based start position */
   e = s + c->siz - 1;
@@ -169,6 +176,7 @@ int byte_Fullcapture(CapState *cs, rBuffer *buf, int count) {
 
 int byte_Close(CapState *cs, rBuffer *buf, int count) {
   size_t e;
+  UNUSED(count);
   if (!isclosecap(cs->cap)) return ROSIE_CLOSE_ERROR;
   e = cs->cap->s - cs->s + 1;	/* 1-based end position */
   encode_pos(cs->L, e, 0, buf);
@@ -177,6 +185,7 @@ int byte_Close(CapState *cs, rBuffer *buf, int count) {
 
 int byte_Open(CapState *cs, rBuffer *buf, int count) {
   size_t s;
+  UNUSED(count);
   if ((cs->cap->kind != Crosiecap) || (cs->cap->siz != 0)) return ROSIE_OPEN_ERROR;
   s = cs->cap->s - cs->s + 1;	/* 1-based start position */
   encode_pos(cs->L, s, 1, buf);
