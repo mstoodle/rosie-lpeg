@@ -47,7 +47,7 @@ int debug_Fullcapture(CapState *cs, rBuffer *buf, int count) {
 
 int debug_Close(CapState *cs, rBuffer *buf, int count) {
   UNUSED(buf); UNUSED(count);
-  if (!cs->cap->kind==Cclose) return ROSIE_CLOSE_ERROR;
+  if (!isclosecap(cs->cap)) return ROSIE_CLOSE_ERROR;
   printf("CLOSE:\n");
   print_capture(cs);
   return ROSIE_OK;
@@ -64,14 +64,14 @@ int debug_Open(CapState *cs, rBuffer *buf, int count) {
 /* Signed 32-bit integers: from −2,147,483,648 to 2,147,483,647  */
 #define MAXNUMBER2STR 16
 #define INT_FMT "%d"
-#define r_inttostring(s, i) (snprintf((s), (MAXNUMBER2STR), (INT_FMT), (i)))
+#define r_inttostring(s, i) (snprintf((char *)(s), (MAXNUMBER2STR), (INT_FMT), (i)))
 #define isopencap(cap)	((captype(cap) != Cclose) && ((cap)->siz == 0))
 
 static void json_encode_pos(lua_State *L, size_t pos, rBuffer *buf) {
-  char numbuff[MAXNUMBER2STR];
+  char nb[MAXNUMBER2STR];
   size_t len;
-  len = r_inttostring(numbuff, (int) pos);
-  r_addlstring(L, buf, numbuff, len);
+  len = r_inttostring(nb, (int) pos);
+  r_addlstring(L, buf, nb, len);
 }
 
 static void json_encode_name(CapState *cs, rBuffer *buf) {
@@ -104,7 +104,7 @@ int json_Fullcapture(CapState *cs, rBuffer *buf, int count) {
 int json_Close(CapState *cs, rBuffer *buf, int count) {
   size_t e;
   UNUSED(count);
-  if (!cs->cap->kind==Cclose) return ROSIE_CLOSE_ERROR;
+  if (!isclosecap(cs->cap)) return ROSIE_CLOSE_ERROR;
   e = cs->cap->s - cs->s + 1;	/* 1-based end position */
   if (!isopencap(cs->cap-1)) r_addstring(cs->L, buf, "]");
   r_addstring(cs->L, buf, ",\"e\":");
@@ -135,19 +135,13 @@ int json_Open(CapState *cs, rBuffer *buf, int count) {
 static void encode_pos(lua_State *L, size_t pos, int negate, rBuffer *buf) {
   int intpos = (int) pos;
   if (negate) intpos = - intpos;
-  r_addlstring(L, buf, (const char *)&intpos, sizeof(int));
+  r_addint(L, buf, intpos);
 }
 
 static void encode_string(lua_State *L, const char *str, size_t len, byte shortflag, rBuffer *buf) {
   /* encode size as a short or an int */
-  if (shortflag) {
-    short shortlen = (short) len;
-    r_addlstring(L, buf, (const char *) &shortlen, sizeof(short));
-  }
-  else {
-    int intlen = (int) len; 
-    r_addlstring(L, buf, (const char *) &intlen, sizeof(int));
-  }
+  if (shortflag) r_addshort(L, buf, (short) len);
+  else r_addint(L, buf, (int) len);
   /* encode the string by copying it into the buffer */
   r_addlstring(L, buf, str, len); 
 }

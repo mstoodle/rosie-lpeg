@@ -535,39 +535,42 @@ int getcaptures (lua_State *L, const char *s, const char *r, int ptop) {
 }
 
 #define check_bounds(s,e) if (*(s) > *(e)) luaL_error(L, "corrupt match data (buffer overrun)");
-#define peek_int(s) (*(const int *)*(s))
-#define read_int(ptr, s) { ptr = (const int *)*(s); *(s) += sizeof(int); check_bounds((s), (e));}
-#define read_short(ptr, s) { ptr = (const short *)*(s); *(s) += sizeof(short); check_bounds((s), (e));}
 
 /* Rosie extensions */
 void r_pushmatch(lua_State *L, const char **s, const char **e, int depth);
 void r_pushmatch(lua_State *L, const char **s, const char **e, int depth) {
   int top;
-  const short *shortp;
-  const int *intp;
+  short shortlen;
+  int pos;
   int n = 0;
-  read_int(intp, s);
-  if ((*intp) > 0) luaL_error(L, "corrupt match data (expected start marker)");
+  pos = r_readint(s);
+  /* OLD_read_int(intlen, s); */
+  /* printf("*** *s = %c %c %c %c\n", **s, *(*s+1), *(*s+2), *(*s+3)); */
+  /* printf("*** OLD version produced: pos = %d, and", *intlen); */
+  /* printf("*** r_pushmatch start: pos = %d\n", pos); */
+  check_bounds(s,e);
+  
+  if ((pos) > 0) luaL_error(L, "corrupt match data (expected start marker)");
 
   lua_checkstack(L, 4);	/* match table, key, value, plus one for luaL_error */
   lua_createtable(L, 0, 5);	/* create match table */ 
   lua_pushliteral(L, "s"); 
-  lua_pushinteger(L, -(*intp)); 
+  lua_pushinteger(L, -(pos)); 
   lua_rawset(L, -3);		/* match["s"] = start position */ 
 
-  read_short(shortp, s);	/* length of name string */
-  if (*shortp < 0) luaL_error(L, "corrupt match data (expected length of name)");
+  shortlen = r_readshort(s);	/* length of name string */
+  if (shortlen < 0) luaL_error(L, "corrupt match data (expected length of name)");
 
   lua_pushliteral(L, "type"); 
-  lua_pushlstring(L, *s, (size_t) *shortp);	
+  lua_pushlstring(L, *s, (size_t) shortlen);	
   lua_rawset(L, -3);		/* match["type"] = name */ 
 
-  (*s) += *shortp;		/* advance to first char after name */
+  (*s) += shortlen;		/* advance to first char after name */
   check_bounds(s, e);
 
   /* process subs, if any */
   top = lua_gettop(L);
-  while (peek_int(s) < 0) {
+  while (r_peekint(s) < 0) {
     r_pushmatch(L, s, e, depth++);
     n++;
   } 
@@ -583,9 +586,14 @@ void r_pushmatch(lua_State *L, const char **s, const char **e, int depth) {
     lua_rawset(L, -3);		/* match["subs"] = subs table */    
   }    
 
-  read_int(intp, s);
+  /* printf("*** *s = %c %c %c %c\n", **s, *(*s+1), *(*s+2), *(*s+3)); */
+  /* OLD_read_int(intlen, s); */
+  /* printf("*** OLD version produced: pos = %d, and", *intlen); */
+  pos = r_readint(s);  
+  /* printf("*** r_pushmatch end: pos = %d \n", pos); */
+  check_bounds(s,e);
   lua_pushliteral(L, "e");  
-  lua_pushinteger(L, *intp);  
+  lua_pushinteger(L, pos);  
   lua_rawset(L, -3);		/* match["e"] = end position */  
   check_bounds(s, e);
 

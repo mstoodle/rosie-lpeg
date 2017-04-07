@@ -115,6 +115,44 @@ void r_addlstring (lua_State *L, rBuffer *buf, const char *s, size_t l) {
   }
 }
 
+void r_addint (lua_State *L, rBuffer *buf, int i) {
+  unsigned char str[4];
+  unsigned int iun = (int) i;
+  str[3] = (iun >> 24) & 0xFF;
+  str[2] = (iun >> 16) & 0xFF;
+  str[1] = (iun >> 8) & 0xFF;
+  str[0] = iun & 0xFF;
+  r_addlstring(L, buf, (const char *)str, 4);
+}
+
+int r_readint(const char **s) {
+  const unsigned char *sun = (const unsigned char *) *s;
+  int i = *sun | (*(sun+1)<<8) | (*(sun+2)<<16) | *(sun+3)<<24;
+  (*s) += 4;
+  return i;
+}
+
+int r_peekint(const char **s) {
+  const unsigned char *sun = (const unsigned char *) *s;
+  return *sun | (*(sun+1)<<8) | (*(sun+2)<<16) | *(sun+3)<<24;
+}
+
+
+void r_addshort (lua_State *L, rBuffer *buf, short i) {
+  char str[2];
+  short iun = (short) i;
+  str[1] = (iun >> 8) & 0xFF;
+  str[0] = iun & 0xFF;
+  r_addlstring(L, buf, str, 2);
+}
+
+int r_readshort(const char **s) {
+  const char *sun = *s;
+  short i = *sun | (*(sun+1)<<8);
+  (*s) += 2;
+  return i;
+}
+
 int r_lua_newbuffer(lua_State *L) {
   r_newbuffer(L);		/* leaves buffer on stack */
   return 1;
