@@ -13,6 +13,77 @@
 #include "rbuf.h"
 #include "rcap.h"
 
+/* TO DO:
+   - Convert caploop to a loop with an explicit stack of START positions
+   - When calling the close function for the last time (i.e. when the stack 
+     has one item in it, pass that item to the close function.  It is the
+     initial start position, so the final call to close can include the 
+     matched portion of the original input, from START to END.
+   - json_Close will encode the string and included it with a 'text' label
+   - byte_Close will use encode_string to store it with an int len prefix,
+     or maybe byte encoding does not need to return the string at all?
+ */
+
+
+static const char *char2escape[256] = {
+    "\\u0000", "\\u0001", "\\u0002", "\\u0003",
+    "\\u0004", "\\u0005", "\\u0006", "\\u0007",
+    "\\b", "\\t", "\\n", "\\u000b",
+    "\\f", "\\r", "\\u000e", "\\u000f",
+    "\\u0010", "\\u0011", "\\u0012", "\\u0013",
+    "\\u0014", "\\u0015", "\\u0016", "\\u0017",
+    "\\u0018", "\\u0019", "\\u001a", "\\u001b",
+    "\\u001c", "\\u001d", "\\u001e", "\\u001f",
+    NULL, NULL, "\\\"", NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, "\\/",
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, "\\\\", NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, "\\u007f",
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+    NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+};
+
+
+/* Worst case is len * 6 (all unicode escapes). Perhaps we should reserve
+   this space in advance, e.g.: r_prepbuffsize(L, buf, len * 6 + 2); */
+
+static void r_addlstring_json(lua_State *L, rBuffer *buf, const char *str, size_t len)
+{
+    static const char dquote = '\"';
+    const char *escstr;
+    size_t i;
+    r_addchar(L, buf, dquote);
+    for (i = 0; i < len; i++) {
+      escstr = char2escape[(unsigned char)str[i]];
+      if (escstr) {r_addstring(L, buf, escstr);} /* escstr is null terminated */
+      else {r_addchar(L, buf, str[i]);}
+    }
+    r_addchar(L, buf, dquote);
+}
+
+
+
 #define UNUSED(x) (void)(x)
 
 static void print_capture(CapState *cs) {
@@ -45,8 +116,8 @@ int debug_Fullcapture(CapState *cs, rBuffer *buf, int count) {
   return ROSIE_OK;
 }
 
-int debug_Close(CapState *cs, rBuffer *buf, int count) {
-  UNUSED(buf); UNUSED(count);
+int debug_Close(CapState *cs, rBuffer *buf, int count, const char *start) {
+  UNUSED(buf); UNUSED(count); UNUSED(start);
   if (!isclosecap(cs->cap)) return ROSIE_CLOSE_ERROR;
   printf("CLOSE:\n");
   print_capture(cs);
@@ -101,14 +172,16 @@ int json_Fullcapture(CapState *cs, rBuffer *buf, int count) {
   return ROSIE_OK;
 }
 
-int json_Close(CapState *cs, rBuffer *buf, int count) {
+int json_Close(CapState *cs, rBuffer *buf, int count, const char *start) {
   size_t e;
-  UNUSED(count);
+  UNUSED(count); UNUSED(start);
   if (!isclosecap(cs->cap)) return ROSIE_CLOSE_ERROR;
   e = cs->cap->s - cs->s + 1;	/* 1-based end position */
   if (!isopencap(cs->cap-1)) r_addstring(cs->L, buf, "]");
   r_addstring(cs->L, buf, ",\"e\":");
   json_encode_pos(cs->L, e, buf);
+  /* r_addstring(cs->L, buf, ",\"text\":"); */
+  /* r_addlstring_json(cs->L, buf, start, e); */
   r_addstring(cs->L, buf, "}");
   return ROSIE_OK;
 }
@@ -168,9 +241,9 @@ int byte_Fullcapture(CapState *cs, rBuffer *buf, int count) {
   return ROSIE_OK;
 }
 
-int byte_Close(CapState *cs, rBuffer *buf, int count) {
+int byte_Close(CapState *cs, rBuffer *buf, int count, const char *start) {
   size_t e;
-  UNUSED(count);
+  UNUSED(count); UNUSED(start);
   if (!isclosecap(cs->cap)) return ROSIE_CLOSE_ERROR;
   e = cs->cap->s - cs->s + 1;	/* 1-based end position */
   encode_pos(cs->L, e, 0, buf);

@@ -45,10 +45,12 @@ int finddyncap (Capture *cap, Capture *last);
 
 #include "rbuf.h"
 
+#define R_MAXDEPTH 200	/* max nesting depth for patterns */
+
 typedef struct {  
   int (*Open)(CapState *cs, rBuffer *buf, int count);
   int (*Fullcapture)(CapState *cs, rBuffer *buf, int count);
-  int (*Close)(CapState *cs, rBuffer *buf, int count);
+  int (*Close)(CapState *cs, rBuffer *buf, int count, const char *start);
 } encoder_functions;
  
 typedef enum r_status { 

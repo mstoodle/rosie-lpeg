@@ -615,26 +615,41 @@ encoder_functions debug_encoder = { debug_Open, debug_Fullcapture, debug_Close }
 encoder_functions byte_encoder = { byte_Open, byte_Fullcapture, byte_Close };
 encoder_functions json_encoder = { json_Open, json_Fullcapture, json_Close };
 
-/* N.B. caploop does NOT have to be recursive.  It can be a flat loop
-   if we keep our own "stack" of inner count values, which is needed
-   so the json encoder can insert commas into lists of more than one item. */
-static int caploop(CapState *cs, encoder_functions *encode, rBuffer *buf, int count) {
+#define push(start, count) \
+  { top++; \
+    if (top>=R_MAXDEPTH) luaL_error(L, "max pattern nesting depth exceeded"); \
+    starts[top]=(start); counts[top]=(count); }
+
+#define pop \
+  { top--; \
+    if (top<0) luaL_error(L, "internal error re nesting depth"); }
+
+static int caploop(CapState *cs, encoder_functions *encode, rBuffer *buf) {
   int err;
-  int inner_count = 0;
-  err = encode->Open(cs, buf, count); if (err) return err;
+  lua_State *L = cs->L;
+  const char *starts[R_MAXDEPTH+1];
+  int counts[R_MAXDEPTH+1];
+  int top = 0;
+  err = encode->Open(cs, buf, 0); if (err) return err;
+  push(cs->cap->s, 0);
   cs->cap++;
-  while (!isclosecap(cs->cap)) {
-    if (cs->cap->siz == 0) {
-      err = caploop(cs, encode, buf, inner_count); if (err) return err;
+  while (top > 0) {
+    while (!isclosecap(cs->cap)) {
+      if (cs->cap->siz == 0) {
+	err = encode->Open(cs, buf, counts[top]); if (err) return err;
+	push(cs->cap->s, 0);
+	cs->cap++;
+      }
+      else {
+	err = encode->Fullcapture(cs, buf, counts[top]); if (err) return err;
+	cs->cap++;
+      }
+      counts[top]++;
     }
-    else {
-      err = encode->Fullcapture(cs, buf, inner_count); if (err) return err;
-      cs->cap++;
-    }
-    inner_count++;
+    pop;
+    encode->Close(cs, buf, counts[top], (top ? NULL : starts[top]));
+    cs->cap++;
   }
-  encode->Close(cs, buf, count);
-  cs->cap++;
   return ROSIE_OK;
 }
 
@@ -669,7 +684,7 @@ int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int etyp
       err = encode.Fullcapture(&cs, buf, 0);
       if (!err && (!isclosecap(++cs.cap))) err = ROSIE_OPEN_ERROR;
     }
-    else err = caploop(&cs, &encode, buf, 0);
+    else err = caploop(&cs, &encode, buf);
     if (err) {
 
 #ifdef ROSIE_DEBUG
