@@ -74,11 +74,12 @@ static void r_addlstring_json(lua_State *L, rBuffer *buf, const char *str, size_
     const char *escstr;
     size_t i;
     r_addchar(L, buf, dquote);
-    for (i = 0; i < len; i++) {
-      escstr = char2escape[(unsigned char)str[i]];
-      if (escstr) {r_addstring(L, buf, escstr);} /* escstr is null terminated */
-      else {r_addchar(L, buf, str[i]);}
-    }
+    /* printf("start=%p, len=%ld", (const void *)str, len); */
+    for (i = 0; i < len; i++) { 
+      escstr = char2escape[(unsigned char)str[i]]; 
+      if (escstr) {r_addstring(L, buf, escstr);} /* escstr is null terminated */ 
+      else {r_addchar(L, buf, str[i]);} 
+    } 
     r_addchar(L, buf, dquote);
 }
 
@@ -164,24 +165,27 @@ int json_Fullcapture(CapState *cs, rBuffer *buf, int count) {
   json_encode_pos(cs->L, s, buf);
   r_addstring(cs->L, buf, ",\"type\":\"");
   json_encode_name(cs, buf);
-  /* r_addstring(cs->L, buf, "\",\"subs\":[],\"e\":"); */
   r_addstring(cs->L, buf, "\",\"e\":");
   e = s + c->siz - 1;		/* length */
   json_encode_pos(cs->L, e, buf);
+  r_addstring(cs->L, buf, ",\"text\":");
+  r_addlstring_json(cs->L, buf, c->s, c->siz -1);
   r_addstring(cs->L, buf, "}");
   return ROSIE_OK;
 }
 
 int json_Close(CapState *cs, rBuffer *buf, int count, const char *start) {
   size_t e;
-  UNUSED(count); UNUSED(start);
+  UNUSED(count);
   if (!isclosecap(cs->cap)) return ROSIE_CLOSE_ERROR;
   e = cs->cap->s - cs->s + 1;	/* 1-based end position */
   if (!isopencap(cs->cap-1)) r_addstring(cs->L, buf, "]");
   r_addstring(cs->L, buf, ",\"e\":");
   json_encode_pos(cs->L, e, buf);
-  /* r_addstring(cs->L, buf, ",\"text\":"); */
-  /* r_addlstring_json(cs->L, buf, start, e); */
+  if (start) {
+    r_addstring(cs->L, buf, ",\"text\":");
+    r_addlstring_json(cs->L, buf, start, cs->cap->s - start);
+  }
   r_addstring(cs->L, buf, "}");
   return ROSIE_OK;
 }

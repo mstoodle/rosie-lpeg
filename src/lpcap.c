@@ -618,7 +618,9 @@ encoder_functions json_encoder = { json_Open, json_Fullcapture, json_Close };
 #define push(start, count) \
   { top++; \
     if (top>=R_MAXDEPTH) luaL_error(L, "max pattern nesting depth exceeded"); \
-    starts[top]=(start); counts[top]=(count); }
+    starts[top]=(start); counts[top]=(count); \
+    /* printf("new stack entry: start=%p, count=%d\n", (const void *)starts[top], counts[top]); \ */ \
+}
 
 #define pop \
   { top--; \
@@ -627,27 +629,33 @@ encoder_functions json_encoder = { json_Open, json_Fullcapture, json_Close };
 static int caploop(CapState *cs, encoder_functions *encode, rBuffer *buf) {
   int err;
   lua_State *L = cs->L;
+  const char *start;
   const char *starts[R_MAXDEPTH+1];
   int counts[R_MAXDEPTH+1];
   int top = 0;
-  err = encode->Open(cs, buf, 0); if (err) return err;
+  int count = 0;
   push(cs->cap->s, 0);
+  err = encode->Open(cs, buf, 0); if (err) return err;
   cs->cap++;
   while (top > 0) {
     while (!isclosecap(cs->cap)) {
       if (cs->cap->siz == 0) {
-	err = encode->Open(cs, buf, counts[top]); if (err) return err;
-	push(cs->cap->s, 0);
-	cs->cap++;
+	push(cs->cap->s, count);
+	err = encode->Open(cs, buf, count); if (err) return err;
+	count = 0;
       }
       else {
-	err = encode->Fullcapture(cs, buf, counts[top]); if (err) return err;
-	cs->cap++;
+	err = encode->Fullcapture(cs, buf, count); if (err) return err;
+	count++;
       }
-      counts[top]++;
+      cs->cap++;
     }
+    count = counts[top];
+    start = starts[top];
     pop;
-    encode->Close(cs, buf, counts[top], (top ? NULL : starts[top]));
+    /* to output the text field only at the top level of the match,
+       supply (top ? NULL : start) as the last arg to encode->Close */
+    encode->Close(cs, buf, count, start);
     cs->cap++;
   }
   return ROSIE_OK;
