@@ -40,7 +40,7 @@ int r_peekint(const char **s);
 void r_addshort (lua_State *L, rBuffer *buf, short i);
 int r_readshort(const char **s);
      
-#define r_addstring(L, buf, s) (r_addlstring)((L), (buf), (s), strlen(s));
-#define r_addchar(L, buf, c) (r_addlstring)((L), (buf), &(c), sizeof(char));
+#define r_addstring(L, buf, s) (r_addlstring)((L), (buf), (s), strlen(s))
+#define r_addchar(L, buf, c) (r_addlstring)((L), (buf), &(c), sizeof(char))
 
 #endif

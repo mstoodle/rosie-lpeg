@@ -133,11 +133,12 @@ int debug_Open(CapState *cs, rBuffer *buf, int count) {
   return ROSIE_OK;
 }
 
-/* Signed 32-bit integers: from −2,147,483,648 to 2,147,483,647  */
-#define MAXNUMBER2STR 16
-#define INT_FMT "%d"
-#define r_inttostring(s, i) (snprintf((char *)(s), (MAXNUMBER2STR), (INT_FMT), (i)))
-#define isopencap(cap)	((captype(cap) != Cclose) && ((cap)->siz == 0))
+/* Some JSON literals */
+#define START_LABEL ("{\"pos\":")
+#define END_LABEL (",\"end\":")
+#define TYPE_LABEL (",\"type\":\"")
+#define DATA_LABEL (",\"data\":")
+#define COMPONENT_LABEL ("\",\"subs\":[")
 
 static void json_encode_pos(lua_State *L, size_t pos, rBuffer *buf) {
   char nb[MAXNUMBER2STR];
@@ -161,14 +162,15 @@ int json_Fullcapture(CapState *cs, rBuffer *buf, int count) {
   if ((c->siz == 0) || (c->kind != Crosiecap)) return ROSIE_FULLCAP_ERROR;
   if (count) r_addstring(cs->L, buf, ",");
   s = c->s - cs->s + 1;		/* 1-based start position */
-  r_addstring(cs->L, buf, "{\"s\":");
+  r_addstring(cs->L, buf, START_LABEL);
   json_encode_pos(cs->L, s, buf);
-  r_addstring(cs->L, buf, ",\"type\":\"");
+  r_addstring(cs->L, buf, TYPE_LABEL);
   json_encode_name(cs, buf);
-  r_addstring(cs->L, buf, "\",\"e\":");
+  r_addstring(cs->L, buf, "\"");
+  r_addstring(cs->L, buf, END_LABEL);
   e = s + c->siz - 1;		/* length */
   json_encode_pos(cs->L, e, buf);
-  r_addstring(cs->L, buf, ",\"text\":");
+  r_addstring(cs->L, buf, DATA_LABEL);
   r_addlstring_json(cs->L, buf, c->s, c->siz -1);
   r_addstring(cs->L, buf, "}");
   return ROSIE_OK;
@@ -180,10 +182,10 @@ int json_Close(CapState *cs, rBuffer *buf, int count, const char *start) {
   if (!isclosecap(cs->cap)) return ROSIE_CLOSE_ERROR;
   e = cs->cap->s - cs->s + 1;	/* 1-based end position */
   if (!isopencap(cs->cap-1)) r_addstring(cs->L, buf, "]");
-  r_addstring(cs->L, buf, ",\"e\":");
+  r_addstring(cs->L, buf,  END_LABEL);
   json_encode_pos(cs->L, e, buf);
   if (start) {
-    r_addstring(cs->L, buf, ",\"text\":");
+    r_addstring(cs->L, buf, DATA_LABEL);
     r_addlstring_json(cs->L, buf, start, cs->cap->s - start);
   }
   r_addstring(cs->L, buf, "}");
@@ -195,12 +197,12 @@ int json_Open(CapState *cs, rBuffer *buf, int count) {
   if (!isopencap(cs->cap) || cs->cap->kind != Crosiecap) return ROSIE_OPEN_ERROR;
   if (count) r_addstring(cs->L, buf, ",");
   s = cs->cap->s - cs->s + 1;	/* 1-based start position */
-  r_addstring(cs->L, buf, "{\"s\":");
+  r_addstring(cs->L, buf, START_LABEL);
   json_encode_pos(cs->L, s, buf);
-  r_addstring(cs->L, buf, ",\"type\":\"");
+  r_addstring(cs->L, buf, TYPE_LABEL);
   json_encode_name(cs, buf);
   if (isclosecap(cs->cap+1)) {r_addstring(cs->L, buf, "\"");}
-  else {r_addstring(cs->L, buf, "\",\"subs\":[");}
+  else {r_addstring(cs->L, buf, COMPONENT_LABEL);}
   return ROSIE_OK;
 }
 

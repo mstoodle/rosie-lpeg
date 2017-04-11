@@ -43,6 +43,8 @@ int finddyncap (Capture *cap, Capture *last);
 
 /* Rosie additions */
 
+#define isopencap(cap)	((captype(cap) != Cclose) && ((cap)->siz == 0))
+
 #include "rbuf.h"
 
 #define R_MAXDEPTH 200	/* max nesting depth for patterns */

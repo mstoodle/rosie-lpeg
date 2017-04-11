@@ -10,6 +10,10 @@
 #if !defined(rcap_h)
 #define rcap_h
 
+/* Signed 32-bit integers: from −2,147,483,648 to 2,147,483,647  */
+#define MAXNUMBER2STR 16
+#define INT_FMT "%d"
+#define r_inttostring(s, i) (snprintf((char *)(s), (MAXNUMBER2STR), (INT_FMT), (i)))
 
 int debug_Fullcapture(CapState *cs, rBuffer *buf, int count);
 int debug_Close(CapState *cs, rBuffer *buf, int count, const char *start);
