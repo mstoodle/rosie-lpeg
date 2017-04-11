@@ -654,9 +654,12 @@ static int caploop(CapState *cs, encoder_functions *encode, rBuffer *buf) {
     start = starts[top];
     pop;
     /* to output the text field only at the top level of the match,
-       supply (top ? NULL : start) as the last arg to encode->Close */
+       supply (top ? NULL : start) as the last arg to encode->Close.
+       and modify Fullcapture.  :-)
+    */
     encode->Close(cs, buf, count, start);
     cs->cap++;
+    count++;
   }
   return ROSIE_OK;
 }
