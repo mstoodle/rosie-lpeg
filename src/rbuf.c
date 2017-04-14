@@ -20,13 +20,21 @@
 /* dynamically allocate storage to replace initb when initb becomes too small */
 /* returns pointer to start of new buffer */
 static void *resizebuf (lua_State *L, rBuffer *buf, size_t newsize) {
-  void *temp;
-  temp = realloc((void *)buf->data, (newsize * sizeof(char)));
-  if (temp == NULL) {
-    free(buf->data);
-    buf->data = NULL; buf->capacity=0; buf->n=0;
-    luaL_error(L, "not enough memory for buffer expansion");
+  /* void *temp; */
+  /* temp = realloc((void *)buf->data, (newsize * sizeof(char))); */
+  /* if (temp == NULL) { */
+  /*   free(buf->data); */
+  /*   buf->data = NULL; buf->capacity=0; buf->n=0; */
+  /*   luaL_error(L, "not enough memory for buffer expansion"); */
+  /* } */
+  void *ud;
+  lua_Alloc allocf = lua_getallocf(L, &ud);
+  void *temp = allocf(ud, buf->data, buf->capacity, newsize);
+  if (temp == NULL && newsize > 0) {  /* allocation error? */
+    allocf(ud, buf->data, buf->capacity, 0);  /* free buffer */
+    luaL_error(L, "not enough memory for buffer allocation");
   }
+
 #ifdef ROSIE_DEBUG
   if (buf->data) fprintf(stderr, "*** resized rbuffer %p to new capacity %ld\n", (void *)buf, newsize);
   else fprintf(stderr, "*** allocated rbuffer %p with capacity %ld\n", (void *)buf, newsize);
@@ -74,7 +82,8 @@ static int buffgc (lua_State *L) {
 #ifdef ROSIE_DEBUG 
   fprintf(stderr, "*** freeing rbuffer->data %p (capacity was %ld)\n", (void *)(buf->data), buf->capacity); 
 #endif 
-  free((void *)buf->data);	/* free dynamically allocated data */ 
+  resizebuf(L, buf, 0);
+  /* free((void *)buf->data);	/\* free dynamically allocated data *\/  */
   } 
   return 0;
 }

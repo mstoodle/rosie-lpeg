@@ -134,11 +134,11 @@ int debug_Open(CapState *cs, rBuffer *buf, int count) {
 }
 
 /* Some JSON literals */
-#define START_LABEL ("{\"pos\":")
+#define TYPE_LABEL ("{\"type\":\"")
+#define START_LABEL (",\"pos\":")
 #define END_LABEL (",\"end\":")
-#define TYPE_LABEL (",\"type\":\"")
 #define DATA_LABEL (",\"data\":")
-#define COMPONENT_LABEL ("\",\"subs\":[")
+#define COMPONENT_LABEL (",\"subs\":[")
 
 static void json_encode_pos(lua_State *L, size_t pos, rBuffer *buf) {
   char nb[MAXNUMBER2STR];
@@ -162,11 +162,11 @@ int json_Fullcapture(CapState *cs, rBuffer *buf, int count) {
   if ((c->siz == 0) || (c->kind != Crosiecap)) return ROSIE_FULLCAP_ERROR;
   if (count) r_addstring(cs->L, buf, ",");
   s = c->s - cs->s + 1;		/* 1-based start position */
-  r_addstring(cs->L, buf, START_LABEL);
-  json_encode_pos(cs->L, s, buf);
   r_addstring(cs->L, buf, TYPE_LABEL);
   json_encode_name(cs, buf);
   r_addstring(cs->L, buf, "\"");
+  r_addstring(cs->L, buf, START_LABEL);
+  json_encode_pos(cs->L, s, buf);
   r_addstring(cs->L, buf, END_LABEL);
   e = s + c->siz - 1;		/* length */
   json_encode_pos(cs->L, e, buf);
@@ -196,13 +196,14 @@ int json_Open(CapState *cs, rBuffer *buf, int count) {
   size_t s;
   if (!isopencap(cs->cap) || cs->cap->kind != Crosiecap) return ROSIE_OPEN_ERROR;
   if (count) r_addstring(cs->L, buf, ",");
+  r_addstring(cs->L, buf, TYPE_LABEL);
+  json_encode_name(cs, buf);
+  r_addstring(cs->L, buf, "\"");
   s = cs->cap->s - cs->s + 1;	/* 1-based start position */
   r_addstring(cs->L, buf, START_LABEL);
   json_encode_pos(cs->L, s, buf);
-  r_addstring(cs->L, buf, TYPE_LABEL);
-  json_encode_name(cs, buf);
-  if (isclosecap(cs->cap+1)) {r_addstring(cs->L, buf, "\"");}
-  else {r_addstring(cs->L, buf, COMPONENT_LABEL);}
+  /* introduce subs array if needed */
+  if (!isclosecap(cs->cap+1)) r_addstring(cs->L, buf, COMPONENT_LABEL);
   return ROSIE_OK;
 }
 
