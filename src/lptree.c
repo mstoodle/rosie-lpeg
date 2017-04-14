@@ -1325,6 +1325,7 @@ static struct luaL_Reg pattreg[] = {
   {"rmatch", r_match},
   {"newbuffer", r_lua_newbuffer},
   {"getdata", r_lua_getdata},
+  {"writedata", r_lua_writedata},
   {"add", r_lua_add},
   {"decode", r_lua_decode},
   {NULL, NULL}

@@ -29,8 +29,10 @@ typedef struct rBuffer {
 int r_lua_newbuffer (lua_State *L);
 int r_lua_getdata (lua_State *L);
 int r_lua_add (lua_State *L);
+int r_lua_writedata(lua_State *L);
 
 rBuffer *r_newbuffer (lua_State *L);
+
 /* the functions below DO NOT use the stack */
 char *r_prepbuffsize (lua_State *L, rBuffer *buf, size_t sz);
 void r_addlstring (lua_State *L, rBuffer *buf, const char *s, size_t l);

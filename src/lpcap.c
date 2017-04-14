@@ -586,11 +586,7 @@ void r_pushmatch(lua_State *L, const char **s, const char **e, int depth) {
     lua_rawset(L, -3);		/* match["subs"] = subs table */    
   }    
 
-  /* printf("*** *s = %c %c %c %c\n", **s, *(*s+1), *(*s+2), *(*s+3)); */
-  /* OLD_read_int(intlen, s); */
-  /* printf("*** OLD version produced: pos = %d, and", *intlen); */
   pos = r_readint(s);  
-  /* printf("*** r_pushmatch end: pos = %d \n", pos); */
   check_bounds(s,e);
   lua_pushliteral(L, "e");  
   lua_pushinteger(L, pos);  
@@ -619,7 +615,6 @@ encoder_functions json_encoder = { json_Open, json_Fullcapture, json_Close };
   { top++; \
     if (top>=R_MAXDEPTH) luaL_error(L, "max pattern nesting depth exceeded"); \
     starts[top]=(start); counts[top]=(count); \
-    /* printf("new stack entry: start=%p, count=%d\n", (const void *)starts[top], counts[top]); \ */ \
 }
 
 #define pop \
