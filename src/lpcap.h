@@ -61,7 +61,7 @@ typedef enum r_status {
 } r_status;
 
 int r_match (lua_State *L);
-int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int encoding);
+int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int etype, size_t len);
 int r_lua_decode (lua_State *L);
 
 #endif

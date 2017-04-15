@@ -668,21 +668,23 @@ static const char *r_status_messages[] = {
 
 #define n_messages ((int) ((sizeof r_status_messages) / sizeof (const char *)))
 
-int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int etype) {
+int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int etype, size_t len) {
   int err;
   encoder_functions encode;
   Capture *capture = (Capture *)lua_touserdata(L, caplistidx(ptop));
   rBuffer *buf = r_newbuffer(L);
   switch (etype) {
+    /* TODO: #define these */
   case -1: { encode = debug_encoder; break; }
   case 0: { encode = byte_encoder; break; }
   case 1: { encode = json_encoder; break; }
+  case 2: { r_addlstring(L, buf, s, len); break; }
   default: {
     lua_pushnil(L);
     lua_pushstring(L, "invalid encoding type");
     return 2;
   } }
-  if (!isclosecap(capture)) {  /* is there a capture? */
+  if ((etype!=2) && (!isclosecap(capture))) {  /* is there a capture? */
     CapState cs;
     cs.ocap = cs.cap = capture; cs.L = L;
     cs.s = s; cs.valuecached = 0; cs.ptop = ptop;

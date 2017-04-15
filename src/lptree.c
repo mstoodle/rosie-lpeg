@@ -1217,7 +1217,7 @@ int r_match (lua_State *L) {
     lua_pushinteger(L, (tmatch-t0)+duration1); /* match time (includes lpeg overhead) */
     return 4;
   }
-  n = r_getcaptures(L, s, r, ptop, encoding);
+  n = r_getcaptures(L, s, r, ptop, encoding, l);
   tfinal = (lua_Integer) clock();
   lua_pushinteger(L, (tfinal-t0)+duration0); /* total time (includes capture processing) */
   lua_pushinteger(L, (tmatch-t0)+duration1); /* match time (includes lpeg overhead) */
