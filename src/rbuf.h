@@ -45,4 +45,8 @@ int r_readshort(const char **s);
 #define r_addstring(L, buf, s) (r_addlstring)((L), (buf), (s), strlen(s))
 #define r_addchar(L, buf, c) (r_addlstring)((L), (buf), &(c), sizeof(char))
 
+#define addsize(B,s)	((B)->n += (s))
+#define r_addlstring_UNSAFE(L, buf, s, l) { memcpy(&((buf)->data[(buf)->n]), (s), (l) * sizeof(char)); addsize((buf), (l)); }
+#define r_addchar_UNSAFE(L, buf, c) r_addlstring_UNSAFE((L), (buf), &(c), sizeof(char))
+
 #endif

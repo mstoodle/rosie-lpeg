@@ -13,8 +13,6 @@
 #include "lauxlib.h"
 #include "rbuf.h"
 
-#define addsize(B,s)	((B)->n += (s))
-
 /* --------------------------------------------------------------------------------------------------- */
 
 /* dynamically allocate storage to replace initb when initb becomes too small */
@@ -145,7 +143,6 @@ int r_peekint(const char **s) {
   const unsigned char *sun = (const unsigned char *) *s;
   return *sun | (*(sun+1)<<8) | (*(sun+2)<<16) | *(sun+3)<<24;
 }
-
 
 void r_addshort (lua_State *L, rBuffer *buf, short i) {
   char str[2];
