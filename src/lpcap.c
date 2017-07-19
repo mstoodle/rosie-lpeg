@@ -544,11 +544,7 @@ void r_pushmatch(lua_State *L, const char **s, const char **e, int depth) {
   int pos;
   int n = 0;
   pos = r_readint(s);
-  /* OLD_read_int(intlen, s); */
-  /* printf("*** *s = %c %c %c %c\n", **s, *(*s+1), *(*s+2), *(*s+3)); */
-  /* printf("*** OLD version produced: pos = %d, and", *intlen); */
-  /* printf("*** r_pushmatch start: pos = %d\n", pos); */
-  check_bounds(s,e);
+  check_bounds(s, e);
   
   if ((pos) > 0) luaL_error(L, "corrupt match data (expected start marker)");
 
@@ -587,7 +583,7 @@ void r_pushmatch(lua_State *L, const char **s, const char **e, int depth) {
   }    
 
   pos = r_readint(s);  
-  check_bounds(s,e);
+  check_bounds(s, e);
   lua_pushliteral(L, "e");  
   lua_pushinteger(L, pos);  
   lua_rawset(L, -3);		/* match["e"] = end position */  
@@ -652,7 +648,7 @@ static int caploop(CapState *cs, encoder_functions *encode, rBuffer *buf) {
        supply (top ? NULL : start) as the last arg to encode->Close.
        and modify Fullcapture.  :-)
     */
-    encode->Close(cs, buf, count, start);
+    err = encode->Close(cs, buf, count, start); if (err) return err;
     cs->cap++;
     count++;
   }

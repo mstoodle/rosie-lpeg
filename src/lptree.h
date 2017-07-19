@@ -24,7 +24,8 @@ typedef enum TTag {
   TGrammar,  /* sib1 is initial (and first) rule */
   TBehind,  /* match behind */
   TCapture,  /* regular capture */
-  TRunTime  /* run-time capture */
+  TRunTime,  /* run-time capture */
+  THalt,			/* rosie */
 } TTag;
 
 /* number of siblings for each tree */

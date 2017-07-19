@@ -169,6 +169,7 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
              s, stack - getstackbase(L, ptop), ndyncap, captop);
       printinst(op, p);
       printcaplist(capture, capture + captop);
+      fflush();
 #endif
     assert(stackidx(ptop) + ndyncap == lua_gettop(L) && ndyncap <= captop);
     switch ((Opcode)p->i.code) {

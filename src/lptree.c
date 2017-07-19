@@ -28,8 +28,9 @@ const byte numsiblings[] = {
   2, 2,		/* seq, choice */
   1, 1,		/* not, and */
   0, 0, 2, 1,  /* call, opencall, rule, grammar */
-  1,  /* behind */
-  1, 1  /* capture, runtime capture */
+  1,	       /* behind */
+  1, 1,	       /* capture, runtime capture */
+  0	       /* halt (rosie) */
 };
 
 
@@ -525,6 +526,14 @@ static int lp_P (lua_State *L) {
   return 1;
 }
 
+/* rosie */
+static int lp_halt (lua_State *L) {
+  newleaf(L, THalt);
+  /* lua_replace(L, 1);  /\* put new tree into top slot *\/ */
+  /* lua_settop(L, 1); */
+  return 1;
+}
+
 
 /*
 ** sequence operator; optimizations:
@@ -534,7 +543,8 @@ static int lp_P (lua_State *L) {
 static int lp_seq (lua_State *L) {
   TTree *tree1 = getpatt(L, 1, NULL);
   TTree *tree2 = getpatt(L, 2, NULL);
-  if (tree1->tag == TFalse || tree2->tag == TTrue)
+  /* rosie adds THalt, which behaves like TFalse in this case */
+  if (tree1->tag == THalt || tree1->tag == TFalse || tree2->tag == TTrue)
     lua_pushvalue(L, 1);  /* false . x == false, x . true = x */
   else if (tree1->tag == TTrue)
     lua_pushvalue(L, 2);  /* true . x = x */
@@ -550,6 +560,9 @@ static int lp_seq (lua_State *L) {
 ** true / x => true, x / false => x, false / x => x
 ** (x / true is not equivalent to true)
 */
+/* for rosie's THalt, we could do this one optimization, but we are
+ * not doing it now: THalt / x => THalt
+ */
 static int lp_choice (lua_State *L) {
   Charset st1, st2;
   TTree *t1 = getpatt(L, 1, NULL);
@@ -1009,7 +1022,7 @@ static int verifyrule (lua_State *L, TTree *tree, int *passed, int npassed,
  tailcall:
   switch (tree->tag) {
     case TChar: case TSet: case TAny:
-    case TFalse:
+    case TFalse: case THalt:	/* rosie adds THalt */
       return nb;  /* cannot pass from here */
     case TTrue:
     case TBehind:  /* look-behind cannot have calls */
@@ -1182,6 +1195,7 @@ static int lp_match (lua_State *L) {
 /* required args: peg, input
  * optional args: start position, encoding type, total time accumulator, lpeg time accumulator
  * encoding types: debug (-1), byte array (0), json (1) 
+ * RESTRICTION: the only capture type supported is rcap
 */
 int r_match (lua_State *L) {
   Capture capture[INITCAPSIZE];
@@ -1316,6 +1330,7 @@ static struct luaL_Reg pattreg[] = {
   {"P", lp_P},
   {"S", lp_set},
   {"R", lp_range},
+  {"Halt", lp_halt},		/* rosie */
   {"locale", lp_locale},
   {"version", lp_version},
   {"setmaxstack", lp_setmax},
