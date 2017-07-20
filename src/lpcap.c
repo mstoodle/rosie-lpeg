@@ -601,7 +601,8 @@ int r_lua_decode (lua_State *L) {
   const char *e = buf->data + buf->n; /* end of data */ 
   lua_Integer t0 = (lua_Integer) clock();
   lua_Integer duration = luaL_optinteger(L, 2, 0); /* time accumulator */
-  r_pushmatch(L, &s, &e, 0);
+  if (buf->n == 0) lua_pushnil(L);
+  else { r_pushmatch(L, &s, &e, 0); }
   lua_pushinteger(L, ((lua_Integer) clock()-t0)+duration); /* processing time */  
   return 2;
 }
@@ -659,7 +660,6 @@ static int caploop(CapState *cs, encoder_functions *encode, rBuffer *buf) {
       Capture synthetic;
       synthetic.s = cs->cap->s;
       synthetic.idx = 0;
-      synthetic.flags = 0;	/* ??? */
       synthetic.kind = Cclose;
       synthetic.siz = 1;	/* 1 means closed */
       cs->cap = &synthetic;
@@ -670,8 +670,7 @@ static int caploop(CapState *cs, encoder_functions *encode, rBuffer *buf) {
 	count = counts[top];
 	start = starts[top];
       }
-      
-      return ROSIE_OK;
+      return ROSIE_HALT;
     }
     err = encode->Close(cs, buf, count, start); if (err) return err;
     cs->cap++;
@@ -689,44 +688,66 @@ static const char *r_status_messages[] = {
 
 #define n_messages ((int) ((sizeof r_status_messages) / sizeof (const char *)))
 
+#define ENCODE_DEBUG -1
+#define ENCODE_BYTE 0
+#define ENCODE_JSON 1
+#define ENCODE_INPUT 2
 int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int etype, size_t len) {
   int err;
   encoder_functions encode;
   Capture *capture = (Capture *)lua_touserdata(L, caplistidx(ptop));
   rBuffer *buf = r_newbuffer(L);
+  int abend = 0;		/* 0 => normal completion; 1 => halt */
   switch (etype) {
     /* TODO: #define these */
-  case -1: { encode = debug_encoder; break; } /* Debug output */
-  case 0: { encode = byte_encoder; break; }   /* Byte array (compact) */
-  case 1: { encode = json_encoder; break; }   /* JSON string */
-  case 2: { r_addlstring(L, buf, s, len); goto done; } /* Put the entire input into buf, and we are done */
+  case ENCODE_DEBUG: { encode = debug_encoder; break; } /* Debug output */
+  case ENCODE_BYTE: { encode = byte_encoder; break; }   /* Byte array (compact) */
+  case ENCODE_JSON: { encode = json_encoder; break; }   /* JSON string */
+  case ENCODE_INPUT: { r_addlstring(L, buf, s, len); goto done; } /* Put the entire input into buf, and we are done */
   default: {
     lua_pushnil(L);
     lua_pushstring(L, "invalid encoding type");
     return 2;
   } }
-  if (!isclosecap(capture) && !isfinalcap(capture)) {  /* is there a capture? */
+  if (isfinalcap(capture)) {
+    abend = 1;
+    goto done;
+  }
+  if (!isclosecap(capture)) {  /* is there a capture? */
     CapState cs;
     cs.ocap = cs.cap = capture; cs.L = L;
     cs.s = s; cs.valuecached = 0; cs.ptop = ptop;
+    /* Rosie's rcap ensures that the pattern has an outer capture.  So
+     * if we see a full capture, it is because the outermost
+     * open/close was converted to a full capture.  And it must be the
+     * only capture in the capture list (except for the sentinel
+     * Cclose put there by the IEnd instruction.
+     */
     if (isfullcap(capture)) {
       err = encode.Fullcapture(&cs, buf, 0);
-      if (!err && (!isclosecap(++cs.cap))) err = ROSIE_OPEN_ERROR;
+      if (!err)
+	{
+	  cs.cap++;
+	  if (!isclosecap(cs.cap) && !isfinalcap(cs.cap)) err = ROSIE_OPEN_ERROR;
+	}
     }
-    else err = caploop(&cs, &encode, buf);
-    if (err) {
-
-#ifdef ROSIE_DEBUG
-      printf("*** caploop returned an error: %d\n", err); fflush(NULL);
-#endif 
-      if ((err < 0) || (err > n_messages)) return luaL_error(L, "in rosie match, unspecified error");
-      else return luaL_error(L, r_status_messages[err]);
-    }
+    else			/* not a full capture */
+      {
+	err = caploop(&cs, &encode, buf);
+      }
+    if (err == ROSIE_HALT)
+      {
+	abend = 1;
+	goto done;
+      }
+    else
+      if (err) {
+	if ((err < 0) || (err > n_messages)) return luaL_error(L, "in rosie match, unspecified error");
+	else return luaL_error(L, r_status_messages[err]);
+      }
   }
 done:
   lua_pushinteger(L, r - s + 1); /* last position */
-  /* TODO: return another value indicating whether the termination was
-      normal (IEnd) or abnormal (IHalt) 
-  */
-  return 2;			 /* an rBuffer is on the stack */
+  lua_pushboolean(L, abend);
+  return 3;			 /* N.B. an rBuffer is on the stack */
 }

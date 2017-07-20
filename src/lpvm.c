@@ -174,7 +174,7 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
     assert(stackidx(ptop) + ndyncap == lua_gettop(L) && ndyncap <= captop);
     switch ((Opcode)p->i.code) {
       case IHalt: {				    /* rosie */
-        assert(stack == getstackbase(L, ptop) + 1); /* TODO: unwind the stack */
+	/* TODO: unwind the stack? Is there any info there that we want?*/
         capture[captop].kind = Cfinal;
         capture[captop].s = s;
         return s;

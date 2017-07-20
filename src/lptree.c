@@ -529,8 +529,6 @@ static int lp_P (lua_State *L) {
 /* rosie */
 static int lp_halt (lua_State *L) {
   newleaf(L, THalt);
-  /* lua_replace(L, 1);  /\* put new tree into top slot *\/ */
-  /* lua_settop(L, 1); */
   return 1;
 }
 
@@ -1194,7 +1192,7 @@ static int lp_match (lua_State *L) {
 
 /* required args: peg, input
  * optional args: start position, encoding type, total time accumulator, lpeg time accumulator
- * encoding types: debug (-1), byte array (0), json (1) 
+ * encoding types: debug (-1), byte array (0), json (1), input (2)
  * RESTRICTION: the only capture type supported is rcap
 */
 int r_match (lua_State *L) {
@@ -1235,7 +1233,7 @@ int r_match (lua_State *L) {
   tfinal = (lua_Integer) clock();
   lua_pushinteger(L, (tfinal-t0)+duration0); /* total time (includes capture processing) */
   lua_pushinteger(L, (tmatch-t0)+duration1); /* match time (includes lpeg overhead) */
-  return n+2;
+  return n+2;				     /* r_getcaptures leaves n values on the stack */
 }
 
 /*

@@ -17,7 +17,7 @@ typedef enum CapKind {
 typedef struct Capture {
   const char *s;  /* subject position */
   unsigned short idx;  /* extra info (group name, arg index, etc.) */
-  unsigned short flags;		/* rosie extension */
+  /* unsigned short flags;		/\* rosie extension *\/ */
   byte kind;  /* kind of capture */
   byte siz;  /* size of full capture + 1 (0 = not a full capture) */
 } Capture;
@@ -58,7 +58,7 @@ typedef struct {
  
 typedef enum r_status { 
      /* OK must be first so that its value is 0 */ 
-     ROSIE_OK, ROSIE_OPEN_ERROR, ROSIE_CLOSE_ERROR, ROSIE_FULLCAP_ERROR
+     ROSIE_HALT = -1, ROSIE_OK, ROSIE_OPEN_ERROR, ROSIE_CLOSE_ERROR, ROSIE_FULLCAP_ERROR
 } r_status;
 
 int r_match (lua_State *L);

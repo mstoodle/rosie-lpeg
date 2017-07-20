@@ -280,8 +280,8 @@ static int getfirst (TTree *tree, const Charset *follow, Charset *firstset) {
       return 0;
     }
     case THalt: {		/* rosie */
-      loopset(i, firstset->cs[i] = 0);
-      return 0;
+      loopset(i, firstset->cs[i] = follow->cs[i]);
+      return 1;  /* accepts the empty string */
     }
     case TChoice: {
       Charset csaux;

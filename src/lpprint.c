@@ -60,7 +60,7 @@ void printinst (const Instruction *op, const Instruction *p) {
     "ret", "end",
     "choice", "jmp", "call", "open_call",
     "commit", "partial_commit", "back_commit", "failtwice", "fail", "giveup",
-     "fullcapture", "opencapture", "closecapture", "closeruntime"
+    "fullcapture", "opencapture", "closecapture", "closeruntime", "halt"
   };
   printf("%02ld: %s ", (long)(p - op), names[p->i.code]);
   switch ((Opcode)p->i.code) {
