@@ -1225,15 +1225,17 @@ int r_match (lua_State *L) {
   if (r == NULL) {
     lua_pushnil(L);
     lua_pushinteger(L, l);	/* leftover value is len */
+    lua_pushboolean(L, 0);	/* dummy, so that there are always 5 return values */
     lua_pushinteger(L, (tmatch-t0)+duration0); /* total time (no capture processing) */
     lua_pushinteger(L, (tmatch-t0)+duration1); /* match time (includes lpeg overhead) */
-    return 4;
+    return 5;
   }
   n = r_getcaptures(L, s, r, ptop, encoding, l);
+  assert(n==3);
   tfinal = (lua_Integer) clock();
   lua_pushinteger(L, (tfinal-t0)+duration0); /* total time (includes capture processing) */
   lua_pushinteger(L, (tmatch-t0)+duration1); /* match time (includes lpeg overhead) */
-  return n+2;				     /* r_getcaptures leaves n values on the stack */
+  return n+2;				     /* success => 3 values on the stack */
 }
 
 /*

@@ -699,16 +699,12 @@ int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int etyp
   rBuffer *buf = r_newbuffer(L);
   int abend = 0;		/* 0 => normal completion; 1 => halt */
   switch (etype) {
-    /* TODO: #define these */
   case ENCODE_DEBUG: { encode = debug_encoder; break; } /* Debug output */
   case ENCODE_BYTE: { encode = byte_encoder; break; }   /* Byte array (compact) */
   case ENCODE_JSON: { encode = json_encoder; break; }   /* JSON string */
   case ENCODE_INPUT: { r_addlstring(L, buf, s, len); goto done; } /* Put the entire input into buf, and we are done */
-  default: {
-    lua_pushnil(L);
-    lua_pushstring(L, "invalid encoding type");
-    return 2;
-  } }
+  default: { return luaL_error(L, "invalid encoding value: %d", etype); }
+  }
   if (isfinalcap(capture)) {
     abend = 1;
     goto done;
