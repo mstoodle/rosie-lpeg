@@ -6,6 +6,7 @@
 /*  LICENSE: MIT License (https://opensource.org/licenses/mit-license.html)  */
 /*  AUTHOR: Jamie A. Jennings                                                */
 
+#define acceptable_capture(kind) (((kind) == Crosiecap) || ((kind) == Cconst))
 
 #include <stdio.h>
 #include <string.h>
@@ -111,7 +112,8 @@ int debug_Fullcapture(CapState *cs, rBuffer *buf, int count) {
   UNUSED(buf); UNUSED(count);
   printf("Full capture:\n");
   print_capture(cs);
-  if ((cs->cap->siz == 0) || (c->kind == Cclose)) return ROSIE_FULLCAP_ERROR;
+  /* if (!isfullcap(cs->cap) || (c->kind == Cclose)) return ROSIE_FULLCAP_ERROR; */
+  if (! (isfullcap(c) || acceptable_capture(c->kind)) ) return ROSIE_FULLCAP_ERROR;
   print_capture_text(start, last);
   return ROSIE_OK;
 }
@@ -126,7 +128,8 @@ int debug_Close(CapState *cs, rBuffer *buf, int count, const char *start) {
 
 int debug_Open(CapState *cs, rBuffer *buf, int count) {
   UNUSED(buf); UNUSED(count);
-  if ((cs->cap->kind == Cclose) || (cs->cap->siz != 0)) return ROSIE_OPEN_ERROR;
+  /* if ((cs->cap->kind == Cclose) || isfullcap(cs->cap)) return ROSIE_OPEN_ERROR; */
+  if (isfullcap(cs->cap) || !acceptable_capture(cs->cap->kind)) return ROSIE_OPEN_ERROR;
   printf("OPEN:\n");
   print_capture(cs);
   return ROSIE_OK;
@@ -158,7 +161,8 @@ static void json_encode_name(CapState *cs, rBuffer *buf) {
 int json_Fullcapture(CapState *cs, rBuffer *buf, int count) {
   Capture *c = cs->cap;
   size_t s, e;
-  if ((c->siz == 0) || (c->kind != Crosiecap)) return ROSIE_FULLCAP_ERROR;
+  /* if (!isfullcap(c) || !acceptable_capture(c->kind)) return ROSIE_FULLCAP_ERROR; */
+  if (! (isfullcap(c) || acceptable_capture(c->kind)) ) return ROSIE_FULLCAP_ERROR;
   if (count) r_addstring(cs->L, buf, ",");
   s = c->s - cs->s + 1;		/* 1-based start position */
   r_addstring(cs->L, buf, TYPE_LABEL);
@@ -193,7 +197,8 @@ int json_Close(CapState *cs, rBuffer *buf, int count, const char *start) {
 
 int json_Open(CapState *cs, rBuffer *buf, int count) {
   size_t s;
-  if (!isopencap(cs->cap) || cs->cap->kind != Crosiecap) return ROSIE_OPEN_ERROR;
+  /* if (! (isopencap(cs->cap) || acceptable_capture(cs->cap->kind)) ) return ROSIE_OPEN_ERROR; */
+  if (isfullcap(cs->cap) || !acceptable_capture(cs->cap->kind)) return ROSIE_OPEN_ERROR;
   if (count) r_addstring(cs->L, buf, ",");
   r_addstring(cs->L, buf, TYPE_LABEL);
   json_encode_name(cs, buf);
@@ -238,7 +243,7 @@ int byte_Fullcapture(CapState *cs, rBuffer *buf, int count) {
   size_t s, e;
   Capture *c = cs->cap;
   UNUSED(count);
-  if (!isfullcap(c) || (c->kind != Crosiecap)) return ROSIE_FULLCAP_ERROR;
+  if (! (isfullcap(c) || acceptable_capture(c->kind)) ) return ROSIE_FULLCAP_ERROR;
   s = c->s - cs->s + 1;		/* 1-based start position */
   e = s + c->siz - 1;
   encode_pos(cs->L, s, 1, buf);	/* negative flag is set */
@@ -259,7 +264,7 @@ int byte_Close(CapState *cs, rBuffer *buf, int count, const char *start) {
 int byte_Open(CapState *cs, rBuffer *buf, int count) {
   size_t s;
   UNUSED(count);
-  if ((cs->cap->kind != Crosiecap) || (cs->cap->siz != 0)) return ROSIE_OPEN_ERROR;
+  if (isfullcap(cs->cap) || !acceptable_capture(cs->cap->kind)) return ROSIE_OPEN_ERROR;
   s = cs->cap->s - cs->s + 1;	/* 1-based start position */
   encode_pos(cs->L, s, 1, buf);
   encode_name(cs, buf);
