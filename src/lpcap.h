@@ -10,7 +10,7 @@
 /* kinds of captures -- 16 at most, since the kind must fit into 4 bits! */
 typedef enum CapKind {
   Cclose, Cposition, Cconst, Cbackref, Carg, Csimple, Ctable, Cfunction,
-  Cquery, Cstring, Cnum, Csubst, Cfold, Cruntime, Cgroup, Crosiecap
+  Cquery, Cstring, Cnum, /* Csubst, */ Cfold, Cruntime, Cgroup, Crosiecap, Cfinal /* rosie */
 } CapKind;
 
 
@@ -37,6 +37,7 @@ int runtimecap (CapState *cs, Capture *close, const char *s, int *rem);
 int getcaptures (lua_State *L, const char *s, const char *r, int ptop);
 int finddyncap (Capture *cap, Capture *last);
 
+#define isfinalcap(cap)	(captype(cap) == Cfinal)
 #define isclosecap(cap)	(captype(cap) == Cclose)
 #define isfullcap(cap)	((cap)->siz != 0)
 #define captype(cap)	((cap)->kind)

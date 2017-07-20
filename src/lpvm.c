@@ -173,8 +173,15 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
 #endif
     assert(stackidx(ptop) + ndyncap == lua_gettop(L) && ndyncap <= captop);
     switch ((Opcode)p->i.code) {
+      case IHalt: {				    /* rosie */
+        assert(stack == getstackbase(L, ptop) + 1); /* TODO: unwind the stack */
+        capture[captop].kind = Cfinal;
+        capture[captop].s = s;
+        return s;
+      }
       case IEnd: {
         assert(stack == getstackbase(L, ptop) + 1);
+	/* this Cclose capture is a sentinel to mark the end of the linked caplist */
         capture[captop].kind = Cclose;
         capture[captop].s = NULL;
         return s;

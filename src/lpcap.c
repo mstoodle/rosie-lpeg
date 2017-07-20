@@ -391,24 +391,25 @@ static void stringcap (luaL_Buffer *b, CapState *cs) {
 /*
 Substitution capture: add result to buffer 'b'
 */
-static void substcap (luaL_Buffer *b, CapState *cs) { 
-  const char *curr = cs->cap->s; 
-  if (isfullcap(cs->cap))  /* no nested captures? */ 
-    luaL_addlstring(b, curr, cs->cap->siz - 1);  /* keep original text */ 
-  else { 
-    cs->cap++;  /* skip open entry */ 
-    while (!isclosecap(cs->cap)) {  /* traverse nested captures */ 
-      const char *next = cs->cap->s; 
-      luaL_addlstring(b, curr, next - curr);  /* add text up to capture */ 
-      if (addonestring(b, cs, "replacement")) 
-        curr = closeaddr(cs->cap - 1);  /* continue after match */ 
-      else  /* no capture value */ 
-        curr = next;  /* keep original text in final result */ 
-    } 
-    luaL_addlstring(b, curr, cs->cap->s - curr);  /* add last piece of text */ 
-  } 
-  cs->cap++;  /* go to next capture */ 
-} 
+/* rosie removes Csubst */
+/* static void substcap (luaL_Buffer *b, CapState *cs) {  */
+/*   const char *curr = cs->cap->s;  */
+/*   if (isfullcap(cs->cap))  /\* no nested captures? *\/  */
+/*     luaL_addlstring(b, curr, cs->cap->siz - 1);  /\* keep original text *\/  */
+/*   else {  */
+/*     cs->cap++;  /\* skip open entry *\/  */
+/*     while (!isclosecap(cs->cap)) {  /\* traverse nested captures *\/  */
+/*       const char *next = cs->cap->s;  */
+/*       luaL_addlstring(b, curr, next - curr);  /\* add text up to capture *\/  */
+/*       if (addonestring(b, cs, "replacement"))  */
+/*         curr = closeaddr(cs->cap - 1);  /\* continue after match *\/  */
+/*       else  /\* no capture value *\/  */
+/*         curr = next;  /\* keep original text in final result *\/  */
+/*     }  */
+/*     luaL_addlstring(b, curr, cs->cap->s - curr);  /\* add last piece of text *\/  */
+/*   }  */
+/*   cs->cap++;  /\* go to next capture *\/  */
+/* }  */
 
 
 /*
@@ -420,9 +421,10 @@ static int addonestring (luaL_Buffer *b, CapState *cs, const char *what) {
     case Cstring: 
       stringcap(b, cs);  /* add capture directly to buffer */ 
       return 1; 
-    case Csubst: 
-      substcap(b, cs);  /* add capture directly to buffer */ 
-      return 1; 
+    /* rosie removes Csubst */
+    /* case Csubst:  */
+    /*   substcap(b, cs);  /\* add capture directly to buffer *\/  */
+    /*   return 1;  */
     default: { 
       lua_State *L = cs->L; 
       int n = pushcapture(cs); 
@@ -479,13 +481,14 @@ static int pushcapture (CapState *cs) {
       luaL_pushresult(&b); 
       return 1; 
     } 
-    case Csubst: { 
-      luaL_Buffer b; 
-      luaL_buffinit(L, &b); 
-      substcap(&b, cs); 
-      luaL_pushresult(&b); 
-      return 1; 
-    } 
+    /* rosie removes Csubst */
+    /* case Csubst: {  */
+    /*   luaL_Buffer b;  */
+    /*   luaL_buffinit(L, &b);  */
+    /*   substcap(&b, cs);  */
+    /*   luaL_pushresult(&b);  */
+    /*   return 1;  */
+    /* }  */
     case Cgroup: {
       if (cs->cap->idx == 0)  /* anonymous group? */
         return pushnestedvalues(cs, 0);  /* add all nested values */
@@ -629,7 +632,7 @@ static int caploop(CapState *cs, encoder_functions *encode, rBuffer *buf) {
   err = encode->Open(cs, buf, 0); if (err) return err;
   cs->cap++;
   while (top > 0) {
-    while (!isclosecap(cs->cap)) {
+    while (!isclosecap(cs->cap) && !isfinalcap(cs->cap)) {
       if (cs->cap->siz == 0) {
 	push(cs->cap->s, count);
 	err = encode->Open(cs, buf, count); if (err) return err;
@@ -644,10 +647,32 @@ static int caploop(CapState *cs, encoder_functions *encode, rBuffer *buf) {
     count = counts[top];
     start = starts[top];
     pop;
-    /* to output the text field only at the top level of the match,
-       supply (top ? NULL : start) as the last arg to encode->Close.
-       and modify Fullcapture.  :-)
-    */
+    /* Currently we ASSUME that every Open will be followed by a
+     * Close.  When we introduce a non-local exit (throw) out of the
+     * vm, we must relax this.  We will need a sentinel, a special
+     * Close different from the one inserted by IEnd.  Here (below),
+     * we will look to see if the Close is that special sentinel.  If
+     * so, then for every still-open capture, we will synthesize a
+     * Close that didn't exist due to the non-local exit from the vm.
+     */
+    if (isfinalcap(cs->cap)) {
+      Capture synthetic;
+      synthetic.s = cs->cap->s;
+      synthetic.idx = 0;
+      synthetic.flags = 0;	/* ??? */
+      synthetic.kind = Cclose;
+      synthetic.siz = 1;	/* 1 means closed */
+      cs->cap = &synthetic;
+      while (1) {
+	err = encode->Close(cs, buf, count, start); if (err) return err;
+	if (top==0) break;
+	pop;
+	count = counts[top];
+	start = starts[top];
+      }
+      
+      return ROSIE_OK;
+    }
     err = encode->Close(cs, buf, count, start); if (err) return err;
     cs->cap++;
     count++;
@@ -671,16 +696,16 @@ int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int etyp
   rBuffer *buf = r_newbuffer(L);
   switch (etype) {
     /* TODO: #define these */
-  case -1: { encode = debug_encoder; break; }
-  case 0: { encode = byte_encoder; break; }
-  case 1: { encode = json_encoder; break; }
-  case 2: { r_addlstring(L, buf, s, len); break; }
+  case -1: { encode = debug_encoder; break; } /* Debug output */
+  case 0: { encode = byte_encoder; break; }   /* Byte array (compact) */
+  case 1: { encode = json_encoder; break; }   /* JSON string */
+  case 2: { r_addlstring(L, buf, s, len); goto done; } /* Put the entire input into buf, and we are done */
   default: {
     lua_pushnil(L);
     lua_pushstring(L, "invalid encoding type");
     return 2;
   } }
-  if ((etype!=2) && (!isclosecap(capture))) {  /* is there a capture? */
+  if (!isclosecap(capture) && !isfinalcap(capture)) {  /* is there a capture? */
     CapState cs;
     cs.ocap = cs.cap = capture; cs.L = L;
     cs.s = s; cs.valuecached = 0; cs.ptop = ptop;
@@ -698,6 +723,10 @@ int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int etyp
       else return luaL_error(L, r_status_messages[err]);
     }
   }
+done:
   lua_pushinteger(L, r - s + 1); /* last position */
+  /* TODO: return another value indicating whether the termination was
+      normal (IEnd) or abnormal (IHalt) 
+  */
   return 2;			 /* an rBuffer is on the stack */
 }

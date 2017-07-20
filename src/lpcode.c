@@ -901,7 +901,7 @@ static void codegen (CompileState *compst, TTree *tree, int opt, int tt,
     case TSet: codecharset(compst, treebuffer(tree), tt); break;
     case TTrue: break;
     case TFalse: addinstruction(compst, IFail, 0); break;
-    case THalt: addinstruction(compst, IEnd, 0); break; /* rosie */
+    case THalt: addinstruction(compst, IHalt, 0); break; /* rosie */
     case TChoice: codechoice(compst, sib1(tree), sib2(tree), opt, fl); break;
     case TRep: coderep(compst, sib1(tree), opt, fl); break;
     case TBehind: codebehind(compst, tree); break;
@@ -946,7 +946,8 @@ static void peephole (CompileState *compst) {
         int ft = finaltarget(code, i);
         switch (code[ft].i.code) {  /* jumping to what? */
           case IRet: case IFail: case IFailTwice:
-          case IEnd: {  /* instructions with unconditional implicit jumps */
+	       /* rosie adds IHalt */
+	  case IHalt: case IEnd: { /* instructions with unconditional implicit jumps */
             code[i] = code[ft];  /* jump becomes that instruction */
             code[i + 1].i.code = IAny;  /* 'no-op' for target position */
             break;
