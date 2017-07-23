@@ -453,11 +453,11 @@ static int pushcapture (CapState *cs) {
       cs->cap++;
       return 1;
     }
-    case Cconst: {
-      pushluaval(cs);
-      cs->cap++;
-      return 1;
-    }
+    /* case Cconst: { */
+    /*   pushluaval(cs); */
+    /*   cs->cap++; */
+    /*   return 1; */
+    /* } */
     case Carg: {
       int arg = (cs->cap++)->idx;
       if (arg + FIXEDARGS > cs->ptop)
@@ -540,6 +540,7 @@ int getcaptures (lua_State *L, const char *s, const char *r, int ptop) {
 #define check_bounds(s,e) if (*(s) > *(e)) luaL_error(L, "corrupt match data (buffer overrun)");
 
 /* Rosie extensions */
+/* See byte encoder in rcap.c */
 void r_pushmatch(lua_State *L, const char **s, const char **e, int depth);
 void r_pushmatch(lua_State *L, const char **s, const char **e, int depth) {
   int top;
@@ -557,9 +558,18 @@ void r_pushmatch(lua_State *L, const char **s, const char **e, int depth) {
   lua_pushinteger(L, -(pos)); 
   lua_rawset(L, -3);		/* match["s"] = start position */ 
 
-  shortlen = r_readshort(s);	/* length of name string */
-  if (shortlen < 0) luaL_error(L, "corrupt match data (expected length of name)");
+  shortlen = r_readshort(s);	/* length of typename string */
+  if (shortlen < 0) {
+       /* special case: for constant capture, we fill in the capture data */
+       lua_pushliteral(L, "data"); 
+       lua_pushlstring(L, *s, (size_t) -shortlen);	
+       lua_rawset(L, -3);		/* match["data"] = const capture value */ 
+       (*s) += -shortlen;		/* advance to first char after */
+       check_bounds(s, e);
+       shortlen = r_readshort(s);	/* length of typename string */
+  }
 
+  if (shortlen < 0) luaL_error(L, "corrupt match data (expected length of type name)");
   lua_pushliteral(L, "type"); 
   lua_pushlstring(L, *s, (size_t) shortlen);	
   lua_rawset(L, -3);		/* match["type"] = name */ 

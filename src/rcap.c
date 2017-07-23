@@ -6,7 +6,7 @@
 /*  LICENSE: MIT License (https://opensource.org/licenses/mit-license.html)  */
 /*  AUTHOR: Jamie A. Jennings                                                */
 
-#define acceptable_capture(kind) (((kind) == Crosiecap) || ((kind) == Cconst))
+#define acceptable_capture(kind) (((kind) == Crosiecap) || ((kind) == Crosieconst))
 
 #include <stdio.h>
 #include <string.h>
@@ -105,6 +105,15 @@ static void print_capture_text(const char *s, const char *e) {
   printf("|\n");
 }
 
+static void print_constant_capture(CapState *cs) {
+  const char *name;
+  size_t len;
+  lua_rawgeti(cs->L, ktableidx(cs->ptop), cs->cap->idx+1);
+  name = lua_tolstring(cs->L, -1, &len);
+  printf("  constant match: %s\n", name);
+  lua_pop(cs->L, 1);
+}
+
 int debug_Fullcapture(CapState *cs, rBuffer *buf, int count) {
   Capture *c = cs->cap;
   const char *start = c->s;
@@ -112,9 +121,10 @@ int debug_Fullcapture(CapState *cs, rBuffer *buf, int count) {
   UNUSED(buf); UNUSED(count);
   printf("Full capture:\n");
   print_capture(cs);
-  /* if (!isfullcap(cs->cap) || (c->kind == Cclose)) return ROSIE_FULLCAP_ERROR; */
-  if (! (isfullcap(c) || acceptable_capture(c->kind)) ) return ROSIE_FULLCAP_ERROR;
-  print_capture_text(start, last);
+  if ( !(isfullcap(c) && acceptable_capture(c->kind)) ) return ROSIE_FULLCAP_ERROR;
+  if (c->kind==Crosieconst)
+       print_constant_capture(cs);
+  else { print_capture_text(start, last); }
   return ROSIE_OK;
 }
 
@@ -135,13 +145,6 @@ int debug_Open(CapState *cs, rBuffer *buf, int count) {
   return ROSIE_OK;
 }
 
-/* Some JSON literals */
-#define TYPE_LABEL ("{\"type\":\"")
-#define START_LABEL (",\"pos\":")
-#define END_LABEL (",\"end\":")
-#define DATA_LABEL (",\"data\":")
-#define COMPONENT_LABEL (",\"subs\":[")
-
 static void json_encode_pos(lua_State *L, size_t pos, rBuffer *buf) {
   char nb[MAXNUMBER2STR];
   size_t len;
@@ -149,10 +152,10 @@ static void json_encode_pos(lua_State *L, size_t pos, rBuffer *buf) {
   r_addlstring(L, buf, nb, len);
 }
 
-static void json_encode_name(CapState *cs, rBuffer *buf) {
+static void json_encode_name(CapState *cs, rBuffer *buf, int offset) {
   const char *name;
   size_t len;
-  lua_rawgeti(cs->L, ktableidx(cs->ptop), cs->cap->idx);
+  lua_rawgeti(cs->L, ktableidx(cs->ptop), cs->cap->idx + offset);
   name = lua_tolstring(cs->L, -1, &len);
   r_addlstring(cs->L, buf, name, len);
   lua_pop(cs->L, 1);
@@ -161,12 +164,11 @@ static void json_encode_name(CapState *cs, rBuffer *buf) {
 int json_Fullcapture(CapState *cs, rBuffer *buf, int count) {
   Capture *c = cs->cap;
   size_t s, e;
-  /* if (!isfullcap(c) || !acceptable_capture(c->kind)) return ROSIE_FULLCAP_ERROR; */
-  if (! (isfullcap(c) || acceptable_capture(c->kind)) ) return ROSIE_FULLCAP_ERROR;
+  if ( !(isfullcap(c) && acceptable_capture(c->kind)) ) return ROSIE_FULLCAP_ERROR;
   if (count) r_addstring(cs->L, buf, ",");
   s = c->s - cs->s + 1;		/* 1-based start position */
   r_addstring(cs->L, buf, TYPE_LABEL);
-  json_encode_name(cs, buf);
+  json_encode_name(cs, buf, 0);
   r_addstring(cs->L, buf, "\"");
   r_addstring(cs->L, buf, START_LABEL);
   json_encode_pos(cs->L, s, buf);
@@ -174,7 +176,16 @@ int json_Fullcapture(CapState *cs, rBuffer *buf, int count) {
   e = s + c->siz - 1;		/* length */
   json_encode_pos(cs->L, e, buf);
   r_addstring(cs->L, buf, DATA_LABEL);
-  r_addlstring_json(cs->L, buf, c->s, c->siz -1);
+
+  switch (c->kind) {
+  case Crosiecap: { r_addlstring_json(cs->L, buf, c->s, c->siz -1); break; }
+  case Crosieconst: {
+       r_addstring(cs->L, buf, "\"");
+       json_encode_name(cs, buf, 1);
+       r_addstring(cs->L, buf, "\"");
+       break; }
+  default: return ROSIE_FULLCAP_ERROR;
+  }
   r_addstring(cs->L, buf, "}");
   return ROSIE_OK;
 }
@@ -201,7 +212,7 @@ int json_Open(CapState *cs, rBuffer *buf, int count) {
   if (isfullcap(cs->cap) || !acceptable_capture(cs->cap->kind)) return ROSIE_OPEN_ERROR;
   if (count) r_addstring(cs->L, buf, ",");
   r_addstring(cs->L, buf, TYPE_LABEL);
-  json_encode_name(cs, buf);
+  json_encode_name(cs, buf, 0);
   r_addstring(cs->L, buf, "\"");
   s = cs->cap->s - cs->s + 1;	/* 1-based start position */
   r_addstring(cs->L, buf, START_LABEL);
@@ -210,6 +221,11 @@ int json_Open(CapState *cs, rBuffer *buf, int count) {
   if (!isclosecap(cs->cap+1)) r_addstring(cs->L, buf, COMPONENT_LABEL);
   return ROSIE_OK;
 }
+
+/* ****************************************************************************************
+ * See r_pushmatch in lptree.c for the decoder 
+ * ****************************************************************************************
+ */
 
 /* The byte array encoding assumes that the input text length fits
    into 2^31, i.e. a signed int, and that the name length fits into
@@ -222,21 +238,22 @@ static void encode_pos(lua_State *L, size_t pos, int negate, rBuffer *buf) {
   r_addint(L, buf, intpos);
 }
 
-static void encode_string(lua_State *L, const char *str, size_t len, byte shortflag, rBuffer *buf) {
+static void encode_string(lua_State *L, const char *str, size_t len,
+			  byte shortflag, byte constcap, rBuffer *buf) {
   /* encode size as a short or an int */
-  if (shortflag) r_addshort(L, buf, (short) len);
-  else r_addint(L, buf, (int) len);
+  if (shortflag) r_addshort(L, buf, (short) (constcap ? -len : len));
+  else r_addint(L, buf, (int) (constcap ? -len : len));
   /* encode the string by copying it into the buffer */
   r_addlstring(L, buf, str, len); 
 }
 
-static void encode_name(CapState *cs, rBuffer *buf) {
+static void encode_name(CapState *cs, rBuffer *buf, int offset) {
   const char *name;
   size_t len;
-  lua_rawgeti(cs->L, ktableidx(cs->ptop), cs->cap->idx); 
+  lua_rawgeti(cs->L, ktableidx(cs->ptop), cs->cap->idx + offset); 
   name = lua_tolstring(cs->L, -1, &len); 
-  encode_string(cs->L, name, len, 1, buf); /* shortflag is set */
-  lua_pop(cs->L, 1);			   /* pop name */
+  encode_string(cs->L, name, len, 1, offset, buf); /* shortflag is set */
+  lua_pop(cs->L, 1);				   /* pop name */
 }
 
 int byte_Fullcapture(CapState *cs, rBuffer *buf, int count) {
@@ -247,7 +264,11 @@ int byte_Fullcapture(CapState *cs, rBuffer *buf, int count) {
   s = c->s - cs->s + 1;		/* 1-based start position */
   e = s + c->siz - 1;
   encode_pos(cs->L, s, 1, buf);	/* negative flag is set */
-  encode_name(cs, buf);
+  /* special case for constant captures: put the capture text into the buffer
+   * before the pattern typename, and use a negative length to mark its presence
+   */
+  if (c->kind == Crosieconst) encode_name(cs, buf, 1);
+  encode_name(cs, buf, 0);
   encode_pos(cs->L, e, 0, buf);
   return ROSIE_OK;
 }
@@ -267,7 +288,7 @@ int byte_Open(CapState *cs, rBuffer *buf, int count) {
   if (isfullcap(cs->cap) || !acceptable_capture(cs->cap->kind)) return ROSIE_OPEN_ERROR;
   s = cs->cap->s - cs->s + 1;	/* 1-based start position */
   encode_pos(cs->L, s, 1, buf);
-  encode_name(cs, buf);
+  encode_name(cs, buf, 0);
   return ROSIE_OK;
 }
 

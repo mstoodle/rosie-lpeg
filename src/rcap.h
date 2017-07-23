@@ -27,5 +27,11 @@ int byte_Fullcapture(CapState *cs, rBuffer *buf, int count);
 int byte_Close(CapState *cs, rBuffer *buf, int count, const char *start);
 int byte_Open(CapState *cs, rBuffer *buf, int count);
 
+/* Some JSON literals */
+#define TYPE_LABEL ("{\"type\":\"")
+#define START_LABEL (",\"pos\":")
+#define END_LABEL (",\"end\":")
+#define DATA_LABEL (",\"data\":")
+#define COMPONENT_LABEL (",\"subs\":[")
 
 #endif

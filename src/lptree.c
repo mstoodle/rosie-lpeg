@@ -832,32 +832,32 @@ static int lp_backref (lua_State *L) {
 /*
 ** Constant capture
 */
-static int lp_constcapture (lua_State *L) {
-  int i;
-  int n = lua_gettop(L);  /* number of values */
-  if (n == 0)  /* no values? */
-    newleaf(L, TTrue);  /* no capture */
-  else if (n == 1)
-    newemptycapkey(L, Cconst, 1);  /* single constant capture */
-  else {  /* create a group capture with all values */
-    TTree *tree = newtree(L, 1 + 3 * (n - 1) + 2);
-    newktable(L, n);  /* create a 'ktable' for new tree */
-    tree->tag = TCapture;
-    tree->cap = Cgroup;
-    tree->key = 0;
-    tree = sib1(tree);
-    for (i = 1; i <= n - 1; i++) {
-      tree->tag = TSeq;
-      tree->u.ps = 3;  /* skip TCapture and its sibling */
-      auxemptycap(sib1(tree), Cconst);
-      sib1(tree)->key = addtoktable(L, i);
-      tree = sib2(tree);
-    }
-    auxemptycap(tree, Cconst);
-    tree->key = addtoktable(L, i);
-  }
-  return 1;
-}
+/* static int lp_constcapture (lua_State *L) { */
+/*   int i; */
+/*   int n = lua_gettop(L);  /\* number of values *\/ */
+/*   if (n == 0)  /\* no values? *\/ */
+/*     newleaf(L, TTrue);  /\* no capture *\/ */
+/*   else if (n == 1) */
+/*     newemptycapkey(L, Cconst, 1);  /\* single constant capture *\/ */
+/*   else {  /\* create a group capture with all values *\/ */
+/*     TTree *tree = newtree(L, 1 + 3 * (n - 1) + 2); */
+/*     newktable(L, n);  /\* create a 'ktable' for new tree *\/ */
+/*     tree->tag = TCapture; */
+/*     tree->cap = Cgroup; */
+/*     tree->key = 0; */
+/*     tree = sib1(tree); */
+/*     for (i = 1; i <= n - 1; i++) { */
+/*       tree->tag = TSeq; */
+/*       tree->u.ps = 3;  /\* skip TCapture and its sibling *\/ */
+/*       auxemptycap(sib1(tree), Cconst); */
+/*       sib1(tree)->key = addtoktable(L, i); */
+/*       tree = sib2(tree); */
+/*     } */
+/*     auxemptycap(tree, Cconst); */
+/*     tree->key = addtoktable(L, i); */
+/*   } */
+/*   return 1; */
+/* } */
 
 
 static int lp_matchtime (lua_State *L) {
@@ -877,6 +877,20 @@ static int r_capture (lua_State *L) {
   return capture_aux(L, Crosiecap, 2);
 }
 
+/* rosie constant capture */
+static int r_constcapture (lua_State *L) { 
+  size_t len;
+  luaL_checklstring(L, 1, &len); /* value (a constant string) */
+  if (len > SHRT_MAX) luaL_error(L, "constant capture string too long");
+  luaL_checklstring(L, 2, &len); /* pattern type (also called "match name") */
+  if (len > SHRT_MAX) luaL_error(L, "capture name too long");
+  /* first entry in ktable: pattern type  */
+  newemptycapkey(L, Crosieconst, 2); /* pushes a TTree onto the stack */
+  /* secon entry in ktable: constant capture value  */
+  addtoktable(L, 1);		     /* value */
+  return 1;
+}  
+  
 
 /* }====================================================== */
 
@@ -1318,7 +1332,7 @@ static struct luaL_Reg pattreg[] = {
   {"B", lp_behind},
   {"V", lp_V},
   {"C", lp_simplecapture},
-  {"Cc", lp_constcapture},
+  /* {"Cc", lp_constcapture}, */
   {"Cmt", lp_matchtime},
   {"Cb", lp_backref},
   {"Carg", lp_argcapture},
@@ -1338,6 +1352,7 @@ static struct luaL_Reg pattreg[] = {
   {"type", lp_type},
   /* Rosie-specific functions below */
   {"rcap", r_capture},
+  {"rconstcap", r_constcapture},
   {"rmatch", r_match},
   {"newbuffer", r_lua_newbuffer},
   {"getdata", r_lua_getdata},

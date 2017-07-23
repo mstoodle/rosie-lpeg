@@ -9,8 +9,9 @@
 
 /* kinds of captures -- 16 at most, since the kind must fit into 4 bits! */
 typedef enum CapKind {
-  Cclose, Cposition, Cconst, Cbackref, Carg, Csimple, Ctable, Cfunction,
-  Cquery, Cstring, Cnum, /* Csubst, */ Cfold, Cruntime, Cgroup, Crosiecap, Cfinal /* rosie */
+  Cclose, Cposition, /* Cconst, */ Cbackref, Carg, Csimple, Ctable, Cfunction,
+  Cquery, Cstring, Cnum, /* Csubst, */ Cfold, Cruntime, Cgroup,
+  Crosiecap, Crosieconst, Cfinal /* rosie */
 } CapKind;
 
 
