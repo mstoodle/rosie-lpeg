@@ -559,7 +559,7 @@ void r_pushmatch(lua_State *L, const char **s, const char **e, int depth) {
   lua_rawset(L, -3);		/* match["s"] = start position */ 
 
   shortlen = r_readshort(s);	/* length of typename string */
-  if (shortlen < 0) {
+  if (shortlen <= 0) {
        /* special case: for constant capture, we fill in the capture data */
        lua_pushliteral(L, "data"); 
        lua_pushlstring(L, *s, (size_t) -shortlen);	

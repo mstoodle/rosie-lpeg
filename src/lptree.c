@@ -874,6 +874,7 @@ static int r_capture (lua_State *L) {
   size_t len;
   luaL_checklstring(L, 2, &len); /* match name */
   if (len > SHRT_MAX) luaL_error(L, "capture name too long");
+  if (len == 0) luaL_error(L, "capture name cannot be the empty string");
   return capture_aux(L, Crosiecap, 2);
 }
 

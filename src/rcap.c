@@ -252,7 +252,7 @@ static void encode_name(CapState *cs, rBuffer *buf, int offset) {
   size_t len;
   lua_rawgeti(cs->L, ktableidx(cs->ptop), cs->cap->idx + offset); 
   name = lua_tolstring(cs->L, -1, &len); 
-  encode_string(cs->L, name, len, 1, offset, buf); /* shortflag is set */
+  encode_string(cs->L, name, len, 1, offset, buf); /* shortflag and constcap are set */
   lua_pop(cs->L, 1);				   /* pop name */
 }
 
