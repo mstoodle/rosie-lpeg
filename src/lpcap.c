@@ -134,6 +134,67 @@ static Capture *findback (CapState *cs, Capture *cap) {
   return NULL;  /* to avoid warnings */
 }
 
+/* 
+ * A Rosie back-reference is a way to match the VALUE of a prior
+ * capture.  One way to implement this is to use the lpeg dynamic
+ * capture (lpeg.Cmt) as is, and do something like this:
+ *
+ *    lpeg.Cmt(lpeg.C(pat) * lpeg.Cb("foo"),
+ *             function (_,_,new,old) return new==old, new end)
+ *
+ * where pat is a pattern used earlier in the pattern whose capture is
+ * named "foo".  But we don't need group captures in Rosie, and Cb()
+ * searches through the names of capture groups (see findback()
+ * above).  We could write our own findback() that would search for
+ * Crosiecap captures instead of Cgroup captures.
+ *
+ * I.e. (1) drop Cgroup.  (2) reuse Cb as-is.  (3) modify findback.
+ *
+ * N.B. If there are multiple captures with the same name, we should
+ * ensure that the "closest" one is used, i.e. the one at the same
+ * level of the rosie expression that is found first when searching
+ * backwards towards the beginning.  We can warn if there is more than
+ * one.  To work around the limitation, the user can always change the
+ * name of a pattern with an assignment, e.g.
+ *    server_ip = net.ip
+ *    client_ip = net.ip
+ *    fancy_match = foo bar client_ip server_ip baz backref:client_ip blah
+ */
+
+/* 
+ * ALTERNATIVELY...  The above approach applies the same pattern, pat,
+ * twice, and examines the results of the second match to see if it's
+ * the same as the prior time.  This has the ADVANTAGE of involving
+ * any lookarounds that are part of the original pattern.  E.g. if the
+ * first pattern is f = foo !bar, then matching 'f "X" backref:f' will
+ * match only if !bar matches "X" and whatever comes after the second
+ * occurence of f in the input also matches !bar.
+ *
+ * An alternative is to literally match (byte at a time) whatever was
+ * captured before.  This is surely faster than the first idea above.
+ * But in this case, we lose the ability to look back before the match
+ * and ahead after the match.  
+ *
+ * Hmmm... these lookarounds may be important to the definition of f
+ * in the above example of f = foo !bar.  But we can extract those
+ * from 'f' and apply them "manually", right?  In the case of this
+ * example, we can see that there is a trailing !bar clause.  To
+ * implement backref:f then, we construct:
+ *    { match_literal(-what-we-captured-for-f-already) !bar }
+ *
+ * But... this may not be easy to do.  Consider g = foo !bar [:alpha:].  
+ * 
+ * It could be that bar = "abcd", in which case g will capture foo
+ * followed by "z" ONLY when the input does not look like foo followed
+ * by "abcd".  I.e. the lookahead goes beyond the end of the capture.
+ *
+ * Maybe "match literally what we captured earlier" is a slightly
+ * different use case from "match the same pattern again and see if we
+ * got the same thing".  They are certainly not interchangeable.  But
+ * are they both valid use cases?  Does one of them correspond to what
+ * people are thinking when they use backreferences in regex?
+ * 
+ */
 
 /*
 ** Back-reference capture. Return number of values pushed.
@@ -552,7 +613,7 @@ void r_pushmatch(lua_State *L, const char **s, const char **e, int depth) {
   
   if ((pos) > 0) luaL_error(L, "corrupt match data (expected start marker)");
 
-  lua_checkstack(L, 4);	/* match table, key, value, plus one for luaL_error */
+  lua_checkstack(L, 4);	        /* match table, key, value, plus one for luaL_error */
   lua_createtable(L, 0, 5);	/* create match table */ 
   lua_pushliteral(L, "s"); 
   lua_pushinteger(L, -(pos)); 
@@ -586,10 +647,10 @@ void r_pushmatch(lua_State *L, const char **s, const char **e, int depth) {
   
   if (n) {    
     lua_createtable(L, n, 0); /* create subs table */     
-    lua_insert(L, top+1);    /* move subs table to below the subs */     
+    lua_insert(L, top+1);     /* move subs table to below the subs */     
     /* fill the subs table (lua_rawseti pops the value as well) */     
     for (int i=n; i>=1; i--) lua_rawseti(L, top+1, (lua_Integer) i);      
-    /* subs table now at top, below: match table */    
+    /* subs table now at top. below it: match table */    
     lua_pushliteral(L, "subs");    
     lua_insert(L, -2);		/* move subs table to top of stack */
     lua_rawset(L, -3);		/* match["subs"] = subs table */    

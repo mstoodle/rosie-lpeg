@@ -1208,7 +1208,7 @@ static int lp_match (lua_State *L) {
 /* required args: peg, input
  * optional args: start position, encoding type, total time accumulator, lpeg time accumulator
  * encoding types: debug (-1), byte array (0), json (1), input (2)
- * RESTRICTION: the only capture type supported is rcap
+ * RESTRICTION: only a limited set of capture types are supported
 */
 int r_match (lua_State *L) {
   Capture capture[INITCAPSIZE];
