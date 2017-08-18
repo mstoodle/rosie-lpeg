@@ -119,11 +119,11 @@ typedef struct Charset {
 #define joinkindoff(k,o)	((k) | ((o) << 4))
 
 #define MAXOFF		0xF
-#define MAXAUX		0xFF
+#define MAXAUX		0xFF	/* aux field of instruction is 'byte' */
 
 
 /* maximum number of bytes to look behind */
-#define MAXBEHIND	MAXAUX
+#define MAXBEHIND	MAXAUX	/* MAXAUX at most (stored in aux field of instruction) */
 
 
 /* maximum size (in elements) for a pattern */
