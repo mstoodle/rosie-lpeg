@@ -41,8 +41,8 @@ typedef enum Opcode {
 
 typedef union Instruction {
   struct Inst {
-    byte code;
-    byte aux;
+    short code;			/* Rosie (was byte) */
+    short aux;			/* Rosie (was byte) */
     short key;
   } i;
   int offset;
