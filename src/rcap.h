@@ -29,8 +29,8 @@ int byte_Open(CapState *cs, rBuffer *buf, int count);
 
 /* Some JSON literals */
 #define TYPE_LABEL ("{\"type\":\"")
-#define START_LABEL (",\"pos\":")
-#define END_LABEL (",\"end\":")
+#define START_LABEL (",\"s\":")
+#define END_LABEL (",\"e\":")
 #define DATA_LABEL (",\"data\":")
 #define COMPONENT_LABEL (",\"subs\":[")
 
