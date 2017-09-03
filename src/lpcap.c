@@ -121,13 +121,13 @@ static Capture *findback (CapState *cs, Capture *cap) {
       cap = findopen(cap);  /* skip nested captures */
     else if (!isfullcap(cap))
       continue; /* opening an enclosing capture: skip and get previous */
-    if (captype(cap) == Cgroup) {
-      getfromktable(cs, cap->idx);  /* get group name */
-      if (lp_equal(L, -2, -1)) {  /* right group? */
-        lua_pop(L, 2);  /* remove reference name and group name */
+    if (captype(cap) == Crosiecap) { /* was Cgroup in plain lpeg (changed for Rosie) */
+      getfromktable(cs, cap->idx);  /* get match name */
+      if (lp_equal(L, -2, -1)) {  /* right name? */
+        lua_pop(L, 2);  /* remove reference name and match name */
         return cap;
       }
-      else lua_pop(L, 1);  /* remove group name */
+      else lua_pop(L, 1);  /* remove match name */
     }
   }
   luaL_error(L, "back reference '%s' not found", lua_tostring(L, -1));
@@ -203,6 +203,9 @@ static int backrefcap (CapState *cs) {
   int n;
   Capture *curr = cs->cap;
   pushluaval(cs);  /* reference name */
+
+  fprintf(stderr, "Pushed ref name %s\n", lua_tostring(cs->L, 1));
+
   cs->cap = findback(cs, curr);  /* find corresponding group */
   n = pushnestedvalues(cs, 0);  /* push group's values */
   cs->cap = curr + 1;
@@ -550,14 +553,14 @@ static int pushcapture (CapState *cs) {
     /*   luaL_pushresult(&b);  */
     /*   return 1;  */
     /* }  */
-    case Cgroup: {
-      if (cs->cap->idx == 0)  /* anonymous group? */
-        return pushnestedvalues(cs, 0);  /* add all nested values */
-      else {  /* named group: add no values */
-        nextcap(cs);  /* skip capture */
-        return 0;
-      }
-    }
+    /* case Cgroup: { */
+    /*   if (cs->cap->idx == 0)  /\* anonymous group? *\/ */
+    /*     return pushnestedvalues(cs, 0);  /\* add all nested values *\/ */
+    /*   else {  /\* named group: add no values *\/ */
+    /*     nextcap(cs);  /\* skip capture *\/ */
+    /*     return 0; */
+    /*   } */
+    /* } */
     case Cbackref: return backrefcap(cs);
     case Ctable: return tablecap(cs);
     case Cfunction: return functioncap(cs);
