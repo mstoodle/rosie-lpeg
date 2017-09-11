@@ -173,8 +173,10 @@ int r_lua_getdata (lua_State *L) {
 int r_lua_writedata(lua_State *L) {
     FILE *fp = *(FILE**) luaL_checkudata(L, 1, LUA_FILEHANDLE);
     rBuffer *buf = (rBuffer *)luaL_checkudata(L, 2, ROSIE_BUFFER);
-    size_t items = fwrite((void *) buf->data, buf->n, 1, fp);
-    if (!items) luaL_error(L, "writedata encountered a write error");
+    size_t items;
+    if (buf->n==0) return 0;
+    items = fwrite((void *) buf->data, buf->n, 1, fp);
+    if (!items) return luaL_error(L, "writedata: write error (buffer %p, size %d)", buf->data, buf->n);
     return 0;
 }
 
