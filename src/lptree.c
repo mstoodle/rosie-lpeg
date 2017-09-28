@@ -18,6 +18,7 @@
 #include "lpprint.h"
 #include "lptree.h"
 
+#include "rbuf.h"
 
 /* number of siblings for each tree */
 const byte numsiblings[] = {
@@ -27,8 +28,9 @@ const byte numsiblings[] = {
   2, 2,		/* seq, choice */
   1, 1,		/* not, and */
   0, 0, 2, 1,  /* call, opencall, rule, grammar */
-  1,  /* behind */
-  1, 1  /* capture, runtime capture */
+  1,	       /* behind */
+  1, 1,	       /* capture, runtime capture */
+  0	       /* halt (rosie) */
 };
 
 
@@ -524,6 +526,12 @@ static int lp_P (lua_State *L) {
   return 1;
 }
 
+/* rosie */
+static int lp_halt (lua_State *L) {
+  newleaf(L, THalt);
+  return 1;
+}
+
 
 /*
 ** sequence operator; optimizations:
@@ -533,7 +541,8 @@ static int lp_P (lua_State *L) {
 static int lp_seq (lua_State *L) {
   TTree *tree1 = getpatt(L, 1, NULL);
   TTree *tree2 = getpatt(L, 2, NULL);
-  if (tree1->tag == TFalse || tree2->tag == TTrue)
+  /* rosie adds THalt, which behaves like TFalse in this case */
+  if (tree1->tag == THalt || tree1->tag == TFalse || tree2->tag == TTrue)
     lua_pushvalue(L, 1);  /* false . x == false, x . true = x */
   else if (tree1->tag == TTrue)
     lua_pushvalue(L, 2);  /* true . x = x */
@@ -549,6 +558,9 @@ static int lp_seq (lua_State *L) {
 ** true / x => true, x / false => x, false / x => x
 ** (x / true is not equivalent to true)
 */
+/* for rosie's THalt, we could do this one optimization, but we are
+ * not doing it now: THalt / x => THalt
+ */
 static int lp_choice (lua_State *L) {
   Charset st1, st2;
   TTree *t1 = getpatt(L, 1, NULL);
@@ -765,10 +777,10 @@ static int lp_divcapture (lua_State *L) {
   }
 }
 
-
-/* static int lp_substcapture (lua_State *L) { */
-/*   return capture_aux(L, Csubst, 0); */
-/* } */
+/* rosie removes Csubst */
+/* static int lp_substcapture (lua_State *L) {  */
+/*   return capture_aux(L, Csubst, 0);  */
+/* }  */
 
 
 static int lp_tablecapture (lua_State *L) {
@@ -809,18 +821,6 @@ static int lp_argcapture (lua_State *L) {
   return 1;
 }
 
-/* rosie capture */
-static int r_capture (lua_State *L) {
-     luaL_checkstring(L, 2);	/* match name */
-     return capture_aux(L, Crosiecap, 2);
-}
-static int r_capindices (lua_State *L) {
-     return capture_aux(L, Crosiesimple, 0);
-}
-static int r_dumpcs (lua_State *L) {
-     return capture_aux(L, Cdumpcs, 0);
-}
-
 
 static int lp_backref (lua_State *L) {
   luaL_checkany(L, 1);
@@ -832,32 +832,32 @@ static int lp_backref (lua_State *L) {
 /*
 ** Constant capture
 */
-static int lp_constcapture (lua_State *L) {
-  int i;
-  int n = lua_gettop(L);  /* number of values */
-  if (n == 0)  /* no values? */
-    newleaf(L, TTrue);  /* no capture */
-  else if (n == 1)
-    newemptycapkey(L, Cconst, 1);  /* single constant capture */
-  else {  /* create a group capture with all values */
-    TTree *tree = newtree(L, 1 + 3 * (n - 1) + 2);
-    newktable(L, n);  /* create a 'ktable' for new tree */
-    tree->tag = TCapture;
-    tree->cap = Cgroup;
-    tree->key = 0;
-    tree = sib1(tree);
-    for (i = 1; i <= n - 1; i++) {
-      tree->tag = TSeq;
-      tree->u.ps = 3;  /* skip TCapture and its sibling */
-      auxemptycap(sib1(tree), Cconst);
-      sib1(tree)->key = addtoktable(L, i);
-      tree = sib2(tree);
-    }
-    auxemptycap(tree, Cconst);
-    tree->key = addtoktable(L, i);
-  }
-  return 1;
-}
+/* static int lp_constcapture (lua_State *L) { */
+/*   int i; */
+/*   int n = lua_gettop(L);  /\* number of values *\/ */
+/*   if (n == 0)  /\* no values? *\/ */
+/*     newleaf(L, TTrue);  /\* no capture *\/ */
+/*   else if (n == 1) */
+/*     newemptycapkey(L, Cconst, 1);  /\* single constant capture *\/ */
+/*   else {  /\* create a group capture with all values *\/ */
+/*     TTree *tree = newtree(L, 1 + 3 * (n - 1) + 2); */
+/*     newktable(L, n);  /\* create a 'ktable' for new tree *\/ */
+/*     tree->tag = TCapture; */
+/*     tree->cap = Cgroup; */
+/*     tree->key = 0; */
+/*     tree = sib1(tree); */
+/*     for (i = 1; i <= n - 1; i++) { */
+/*       tree->tag = TSeq; */
+/*       tree->u.ps = 3;  /\* skip TCapture and its sibling *\/ */
+/*       auxemptycap(sib1(tree), Cconst); */
+/*       sib1(tree)->key = addtoktable(L, i); */
+/*       tree = sib2(tree); */
+/*     } */
+/*     auxemptycap(tree, Cconst); */
+/*     tree->key = addtoktable(L, i); */
+/*   } */
+/*   return 1; */
+/* } */
 
 
 static int lp_matchtime (lua_State *L) {
@@ -867,6 +867,31 @@ static int lp_matchtime (lua_State *L) {
   tree->key = addtonewktable(L, 1, 2);
   return 1;
 }
+
+
+/* rosie capture */
+static int r_capture (lua_State *L) {
+  size_t len;
+  luaL_checklstring(L, 2, &len); /* match name */
+  if (len > SHRT_MAX) luaL_error(L, "capture name too long");
+  if (len == 0) luaL_error(L, "capture name cannot be the empty string");
+  return capture_aux(L, Crosiecap, 2);
+}
+
+/* rosie constant capture */
+static int r_constcapture (lua_State *L) { 
+  size_t len;
+  luaL_checklstring(L, 1, &len); /* value (a constant string) */
+  if (len > SHRT_MAX) luaL_error(L, "constant capture string too long");
+  luaL_checklstring(L, 2, &len); /* pattern type (also called "match name") */
+  if (len > SHRT_MAX) luaL_error(L, "capture name too long");
+  /* first entry in ktable: pattern type  */
+  newemptycapkey(L, Crosieconst, 2); /* pushes a TTree onto the stack */
+  /* secon entry in ktable: constant capture value  */
+  addtoktable(L, 1);		     /* value */
+  return 1;
+}  
+  
 
 /* }====================================================== */
 
@@ -1010,7 +1035,7 @@ static int verifyrule (lua_State *L, TTree *tree, int *passed, int npassed,
  tailcall:
   switch (tree->tag) {
     case TChar: case TSet: case TAny:
-    case TFalse:
+    case TFalse: case THalt:	/* rosie adds THalt */
       return nb;  /* cannot pass from here */
     case TTrue:
     case TBehind:  /* look-behind cannot have calls */
@@ -1141,8 +1166,8 @@ static int lp_printcode (lua_State *L) {
 ** Get the initial position for the match, interpreting negative
 ** values from the end of the subject
 */
-static size_t initposition (lua_State *L, size_t len) {
-  lua_Integer ii = luaL_optinteger(L, 3, 1);
+static size_t initposition (lua_State *L, size_t len, int idx) {
+  lua_Integer ii = luaL_optinteger(L, idx, 1);
   if (ii > 0) {  /* positive index? */
     if ((size_t)ii <= len)  /* inside the string? */
       return (size_t)ii - 1;  /* return it (corrected to 0-base) */
@@ -1166,7 +1191,7 @@ static int lp_match (lua_State *L) {
   Pattern *p = (getpatt(L, 1, NULL), getpattern(L, 1));
   Instruction *code = (p->code != NULL) ? p->code : prepcompile(L, p, 1);
   const char *s = luaL_checklstring(L, SUBJIDX, &l);
-  size_t i = initposition(L, l);
+  size_t i = initposition(L, l, SUBJIDX+1);
   int ptop = lua_gettop(L);
   lua_pushnil(L);  /* initialize subscache */
   lua_pushlightuserdata(L, capture);  /* initialize caplistidx */
@@ -1179,31 +1204,16 @@ static int lp_match (lua_State *L) {
   return getcaptures(L, s, r, ptop);
 }
 
-/* for r_match, the 3rd arg (start position) is REQUIRED */
-static size_t r_initposition (lua_State *L, size_t len);
-static size_t r_initposition (lua_State *L, size_t len) {
-     lua_Integer ii = luaL_checkinteger(L, 3);
-  if (ii > 0) {  /* positive index? */
-    if ((size_t)ii <= len)  /* inside the string? */
-      return (size_t)ii - 1;  /* return it (corrected to 0-base) */
-    else return len;  /* crop at the end */
-  }
-  else {  /* negative index */
-    if ((size_t)(-ii) <= len)  /* inside the string? */
-      return len - ((size_t)(-ii));  /* return position from the end */
-    else return 0;  /* crop at the beginning */
-  }
-}
 
-/* for r_match, the 4th, 5th args (accumulated times) are REQUIRED */
-
-/*
-** Rosie match function
+/* required args: peg, input
+ * optional args: start position, encoding type, total time accumulator, lpeg time accumulator
+ * encoding types: debug (-1), byte array (0), json (1), input (2)
+ * RESTRICTION: only a limited set of capture types are supported
 */
-static int r_match (lua_State *L) {
+int r_match (lua_State *L) {
   Capture capture[INITCAPSIZE];
-  int n;
-  lua_Integer t0, tfin, duration0, duration1;
+  int n, encoding;
+  lua_Integer t0, tmatch, tfinal, duration0, duration1;
   const char *r;
   size_t l;
   Pattern *p;
@@ -1215,78 +1225,32 @@ static int r_match (lua_State *L) {
   p = (getpatt(L, 1, NULL), getpattern(L, 1));
   code = (p->code != NULL) ? p->code : prepcompile(L, p, 1);
   s = luaL_checklstring(L, SUBJIDX, &l);
-  i = r_initposition(L, l);
-  duration0 = luaL_checkinteger(L, 4); /* matching only */
-  duration1 = luaL_checkinteger(L, 5); /* processing captures only */
+  if (l > INT_MAX) luaL_error(L, "input string too long");
+  i = initposition(L, l, SUBJIDX+1);
+  encoding = luaL_optinteger(L, SUBJIDX+2, 0);
+  duration0 = luaL_optinteger(L, SUBJIDX+3, 0);	/* total time accumulator */
+  duration1 = luaL_optinteger(L, SUBJIDX+4, 0); /* total time without post-processing */
+  /* prepare for matching */
   ptop = lua_gettop(L);
   lua_pushnil(L);  /* initialize subscache */
   lua_pushlightuserdata(L, capture);  /* initialize caplistidx */
   lua_getuservalue(L, 1);  /* initialize penvidx */
   r = match(L, s, s + i, s + l, code, capture, ptop);
+  tmatch = (lua_Integer) clock();
   if (r == NULL) {
     lua_pushnil(L);
     lua_pushinteger(L, l);	/* leftover value is len */
-    tfin = (lua_Integer) clock();
-    lua_pushinteger(L, tfin-t0+duration0); /* new matching duration */
-    lua_pushinteger(L, duration1); /* no captures, so no change */
-    return 4;
+    lua_pushboolean(L, 0);	/* dummy, so that there are always 5 return values */
+    lua_pushinteger(L, (tmatch-t0)+duration0); /* total time (no capture processing) */
+    lua_pushinteger(L, (tmatch-t0)+duration1); /* match time (includes lpeg overhead) */
+    return 5;
   }
-  tfin = (lua_Integer) clock();
-  n = getcaptures(L, s, r, ptop);
-  /* lua_pushinteger(L, ??); leftover value so that we can eliminate the Cp() added in pattern.tlpeg */
-  lua_pushinteger(L, tfin-t0+duration0); /* new matching duration */
-  lua_pushinteger(L, ((lua_Integer) clock())-tfin+duration1); /* new capture processing duration */
-  return n+2;
-}
-
-int r_matchdump (lua_State *L) {
-  Capture capture[INITCAPSIZE];
-  int n;
-  lua_Integer t0, tfin, duration0, duration1;
-  const char *r;
-  size_t l;
-  Pattern *p;
-  Instruction *code;
-  const char *s, *style;
-  size_t i;
-  int ptop;
-  t0 = (lua_Integer) clock();
-  p = (getpatt(L, 1, NULL), getpattern(L, 1));
-  code = (p->code != NULL) ? p->code : prepcompile(L, p, 1);
-  s = luaL_checklstring(L, SUBJIDX, &l);
-  i = r_initposition(L, l);
-  duration0 = luaL_checkinteger(L, 4); /* matching only */
-  duration1 = luaL_checkinteger(L, 5); /* processing captures only */
-  style = luaL_checkstring(L, 6);      /* e.g. 'json' */
-  switch ((char) *style) {
-  case 's': break;
-  case 'l': break;
-  case 'j': break;
-  default: {
-       lua_pushnil(L);
-       lua_pushstring(L, "illegal encoding type (valid types are lua, json, str)");
-       return 2;
-  }}
-  ptop = lua_gettop(L);
-  lua_pushnil(L);  /* initialize subscache */
-  lua_pushlightuserdata(L, capture);  /* initialize caplistidx */
-  lua_getuservalue(L, 1);  /* initialize penvidx */
-  r = match(L, s, s + i, s + l, code, capture, ptop);
-  if (r == NULL) {
-    lua_pushnil(L);
-    lua_pushinteger(L, l);	/* leftover value is len */
-    tfin = (lua_Integer) clock();
-    lua_pushinteger(L, tfin-t0+duration0); /* new matching duration */
-    lua_pushinteger(L, duration1); /* no captures, so no change */
-    return 4;
-  }
-  tfin = (lua_Integer) clock();
-
-  n = r_getcaptures(L, s, ptop, (const char) *style);
-
-  lua_pushinteger(L, tfin-t0+duration0); /* new matching duration */
-  lua_pushinteger(L, ((lua_Integer) clock())-tfin+duration1); /* new capture processing duration */
-  return n+2;
+  n = r_getcaptures(L, s, r, ptop, encoding, l);
+  assert(n==3);
+  tfinal = (lua_Integer) clock();
+  lua_pushinteger(L, (tfinal-t0)+duration0); /* total time (includes capture processing) */
+  lua_pushinteger(L, (tmatch-t0)+duration1); /* match time (includes lpeg overhead) */
+  return n+2;				     /* success => 3 values on the stack */
 }
 
 /*
@@ -1369,11 +1333,12 @@ static struct luaL_Reg pattreg[] = {
   {"B", lp_behind},
   {"V", lp_V},
   {"C", lp_simplecapture},
-  {"Cc", lp_constcapture},
+  /* {"Cc", lp_constcapture}, */
   {"Cmt", lp_matchtime},
   {"Cb", lp_backref},
   {"Carg", lp_argcapture},
   {"Cp", lp_poscapture},
+  /* rosie removes Csubst */
   /* {"Cs", lp_substcapture}, */
   {"Ct", lp_tablecapture},
   {"Cf", lp_foldcapture},
@@ -1381,20 +1346,22 @@ static struct luaL_Reg pattreg[] = {
   {"P", lp_P},
   {"S", lp_set},
   {"R", lp_range},
+  {"Halt", lp_halt},		/* rosie */
   {"locale", lp_locale},
   {"version", lp_version},
   {"setmaxstack", lp_setmax},
   {"type", lp_type},
   /* Rosie-specific functions below */
-  /* {"r_dumpcs", r_dumpcs}, */
-  /* {"r_match", r_match}, */
-  /* {"r_create_match", r_create_match}, */
-  {"r_capture", r_capture},
-  {"r_capindices", r_capindices},
-  {"r_matchdump", r_matchdump},
+  {"rcap", r_capture},
+  {"rconstcap", r_constcapture},
+  {"rmatch", r_match},
+  {"newbuffer", r_lua_newbuffer},
+  {"getdata", r_lua_getdata},
+  {"writedata", r_lua_writedata},
+  {"add", r_lua_add},
+  {"decode", r_lua_decode},
   {NULL, NULL}
 };
-
 
 static struct luaL_Reg metareg[] = {
   {"__mul", lp_seq},

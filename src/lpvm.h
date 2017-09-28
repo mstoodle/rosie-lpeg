@@ -33,7 +33,8 @@ typedef enum Opcode {
   IFullCapture,  /* complete capture of last 'off' chars */
   IOpenCapture,  /* start a capture */
   ICloseCapture,
-  ICloseRunTime
+  ICloseRunTime,
+  IHalt				/* rosie */
 } Opcode;
 
 
@@ -41,7 +42,7 @@ typedef enum Opcode {
 typedef union Instruction {
   struct Inst {
     byte code;
-    byte aux;
+    short aux;			/* Rosie (was byte) */
     short key;
   } i;
   int offset;

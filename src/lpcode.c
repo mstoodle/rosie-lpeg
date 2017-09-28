@@ -173,9 +173,9 @@ int checkaux (TTree *tree, int pred) {
  tailcall:
   switch (tree->tag) {
     case TChar: case TSet: case TAny:
-    case TFalse: case TOpenCall:
+    case TFalse: case TOpenCall: 
       return 0;  /* not nullable */
-    case TRep: case TTrue:
+    case TRep: case TTrue: case THalt: /* rosie adds THalt */
       return 1;  /* no fail */
     case TNot: case TBehind:  /* can match empty, but can fail */
       if (pred == PEnofail) return 0;
@@ -215,7 +215,7 @@ int fixedlenx (TTree *tree, int count, int len) {
   switch (tree->tag) {
     case TChar: case TSet: case TAny:
       return len + 1;
-    case TFalse: case TTrue: case TNot: case TAnd: case TBehind:
+    case TFalse: case TTrue: case TNot: case TAnd: case TBehind: case THalt: /* rosie adds THalt */
       return len;
     case TRep: case TRunTime: case TOpenCall:
       return -1;
@@ -278,6 +278,10 @@ static int getfirst (TTree *tree, const Charset *follow, Charset *firstset) {
     case TFalse: {
       loopset(i, firstset->cs[i] = 0);
       return 0;
+    }
+    case THalt: {		/* rosie */
+      loopset(i, firstset->cs[i] = follow->cs[i]);
+      return 1;  /* accepts the empty string */
     }
     case TChoice: {
       Charset csaux;
@@ -350,7 +354,7 @@ static int getfirst (TTree *tree, const Charset *follow, Charset *firstset) {
 static int headfail (TTree *tree) {
  tailcall:
   switch (tree->tag) {
-    case TChar: case TSet: case TAny: case TFalse:
+    case TChar: case TSet: case TAny: case TFalse: case THalt: /* rosie adds THalt */
       return 1;
     case TTrue: case TRep: case TRunTime: case TNot:
     case TBehind:
@@ -381,7 +385,7 @@ static int needfollow (TTree *tree) {
  tailcall:
   switch (tree->tag) {
     case TChar: case TSet: case TAny:
-    case TFalse: case TTrue: case TAnd: case TNot:
+    case TFalse: case TTrue: case TAnd: case TNot: case THalt: /* rosie adds THalt */
     case TRunTime: case TGrammar: case TCall: case TBehind:
       return 0;
     case TChoice: case TRep:
@@ -897,6 +901,7 @@ static void codegen (CompileState *compst, TTree *tree, int opt, int tt,
     case TSet: codecharset(compst, treebuffer(tree), tt); break;
     case TTrue: break;
     case TFalse: addinstruction(compst, IFail, 0); break;
+    case THalt: addinstruction(compst, IHalt, 0); break; /* rosie */
     case TChoice: codechoice(compst, sib1(tree), sib2(tree), opt, fl); break;
     case TRep: coderep(compst, sib1(tree), opt, fl); break;
     case TBehind: codebehind(compst, tree); break;
@@ -941,7 +946,8 @@ static void peephole (CompileState *compst) {
         int ft = finaltarget(code, i);
         switch (code[ft].i.code) {  /* jumping to what? */
           case IRet: case IFail: case IFailTwice:
-          case IEnd: {  /* instructions with unconditional implicit jumps */
+	       /* rosie adds IHalt */
+	  case IHalt: case IEnd: { /* instructions with unconditional implicit jumps */
             code[i] = code[ft];  /* jump becomes that instruction */
             code[i + 1].i.code = IAny;  /* 'no-op' for target position */
             break;
@@ -977,7 +983,7 @@ Instruction *compile (lua_State *L, Pattern *p) {
   codegen(&compst, p->tree, 0, NOINST, fullset);
   addinstruction(&compst, IEnd, 0);
   realloccode(L, p, compst.ncode);  /* set final size */
-  peephole(&compst);
+  peephole(&compst);  
   return p->code;
 }
 

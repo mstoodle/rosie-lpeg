@@ -169,11 +169,19 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
              s, stack - getstackbase(L, ptop), ndyncap, captop);
       printinst(op, p);
       printcaplist(capture, capture + captop);
+      fflush();
 #endif
     assert(stackidx(ptop) + ndyncap == lua_gettop(L) && ndyncap <= captop);
     switch ((Opcode)p->i.code) {
+      case IHalt: {				    /* rosie */
+	/* TODO: unwind the stack? Is there any info there that we want?*/
+        capture[captop].kind = Cfinal;
+        capture[captop].s = s;
+        return s;
+      }
       case IEnd: {
         assert(stack == getstackbase(L, ptop) + 1);
+	/* this Cclose capture is a sentinel to mark the end of the linked caplist */
         capture[captop].kind = Cclose;
         capture[captop].s = NULL;
         return s;
