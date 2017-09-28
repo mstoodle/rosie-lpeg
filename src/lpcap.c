@@ -603,80 +603,6 @@ int getcaptures (lua_State *L, const char *s, const char *r, int ptop) {
 
 #define check_bounds(s,e) if (*(s) > *(e)) luaL_error(L, "corrupt match data (buffer overrun)");
 
-<<<<<<< HEAD
-void dumpcs(Capture *c, const char *start, int ptop, lua_State *L);
-void dumpcs(Capture *c, const char *start, int ptop, lua_State *L) {
-     printf("Capture:\n");
-     printf("  isfullcap? %s\n", isfullcap(c) ? "true" : "false");
-     printf("  kind = %u\n", c->kind);
-     printf("  pos = %lu\n", (size_t) (c->s ? (c->s - start) : 0));
-     printf("  size = %u\n", c->siz);
-     printf("  idx = %u\n", c->idx);
-     lua_rawgeti(L, ktableidx(ptop), c->idx);
-     printf("  ktable[idx] = %s\n", lua_tostring(L, -1));
-}
-
-/* int r_printcap(Capture *c, const char *start, int ptop, lua_State *L); */
-/* int r_printcap(Capture *c, const char *start, int ptop, lua_State *L) { */
-/*   switch (c->kind) { */
-/*      case Crosiecap: { */
-/* 	  lua_rawgeti(L, ktableidx(ptop), c->idx); */
-/* 	  printf("%s\n", lua_tostring(L, -1)); */
-/* 	  return 0; */
-/*      } */
-/*      case Crosiesimple: { */
-/* 	  if (c->siz) { */
-/* 	       printf("   pos = %lu\n", (size_t) (c->s ? (c->s - start) : 0)); */
-/* 	       printf("   size = %u\n", c->siz-1); */
-/* 	       return 0; */
-/* 	  } */
-/* 	  else { */
-/* 	       printf("(nested) pos = %lu\n", (size_t) (c->s ? (c->s - start) : 0)); */
-/* 	       return 1; */
-/* 	  } */
-/*      } */
-/*      case Cclose: { */
-/* 	  printf("Close: pos = %lu\n", (size_t) (c->s ? (c->s - start) : 0)); */
-/* 	  return 0; */
-/*      } */
-       
-/*      default: { */
-/* 	  printf("Error: default case taken, captype = %d\n", c->kind); */
-/* 	  return 0; */
-/*      } */
-/*   } */
-/* } */
-
-
-/* Signed 32-bit integers: from −2,147,483,648 to 2,147,483,647  */
-#define MAXNUMBER2STR 16
-#define INT_FMT "%d"
-#define r_tostring(s, max, i) (snprintf((s), (max), (INT_FMT), (i)))
-
-typedef enum r_status {
-     /* r_OK must be first so that its value is 0 */
-     r_OK, r_ERRORCrosiecap, r_ERRORCrosiesimple, r_ERRORCclose, r_ERRORcapsize
-} r_status;
-
-static int handleNew(Capture *cap, int ptop, int nextnested, luaL_Buffer *buf);
-static int handleNew(Capture *cap, int ptop, int nextnested, luaL_Buffer *buf) {
-  const char *name;
-  size_t len;
-  int intlen;
-  int nested = (cap->kind==Crosiesimple) && (!cap->siz);
-  if (!nested) {
-    if (cap->kind==Crosiecap) {
-      lua_rawgeti(buf->L, ktableidx(ptop), cap->idx);
-      name = lua_tolstring(buf->L, -1, &len);
-      intlen = - (int) len;
-      luaL_addlstring(buf, (const char *)&intlen, sizeof(int));
-      luaL_addlstring(buf, name, len);
-#ifdef ROSIE_DEBUG
-      printf("NEW node: %s\n", name);	/* N.B. prints only up to the first null byte */
-#endif
-    }
-    else return r_ERRORCrosiecap;
-=======
 /* Rosie extensions */
 /* See byte encoder in rcap.c */
 void r_pushmatch(lua_State *L, const char **s, const char **e, int depth);
@@ -705,33 +631,8 @@ void r_pushmatch(lua_State *L, const char **s, const char **e, int depth) {
        (*s) += -shortlen;		/* advance to first char after */
        check_bounds(s, e);
        shortlen = r_readshort(s);	/* length of typename string */
->>>>>>> 7428ff
   }
 
-<<<<<<< HEAD
-static int handleNew_json(Capture *cap, int ptop, int nextnested, luaL_Buffer *buf);
-static int handleNew_json(Capture *cap, int ptop, int nextnested, luaL_Buffer *buf) {
-  const char *name;
-  size_t len;
-  int nested = (cap->kind==Crosiesimple) && (!cap->siz);
-  if (!nested) {
-    if (cap->kind==Crosiecap) {
-      luaL_addstring(buf, "{\"type\": \"");
-      lua_rawgeti(buf->L, ktableidx(ptop), cap->idx);
-      name = luaL_checklstring(buf->L, -1, &len);
-      luaL_addvalue(buf);
-      luaL_addstring(buf, "\"");
-      if (nextnested) luaL_addstring(buf, ", \"subs\": [ ");
-#ifdef ROSIE_DEBUG
-      printf("JSON NEW node: %s\n", name);	/* N.B. prints only up to the first null byte */
-#endif
-    }
-    else return r_ERRORCrosiecap;
-  }
-  return r_OK;
-}
-
-=======
   if (shortlen < 0) luaL_error(L, "corrupt match data (expected length of type name)");
   lua_pushliteral(L, "type"); 
   lua_pushlstring(L, *s, (size_t) shortlen);	
@@ -739,7 +640,6 @@ static int handleNew_json(Capture *cap, int ptop, int nextnested, luaL_Buffer *b
 
   (*s) += shortlen;		/* advance to first char after name */
   check_bounds(s, e);
->>>>>>> 7428ff
 
   /* process subs, if any */
   top = lua_gettop(L);
