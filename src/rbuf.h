@@ -36,14 +36,13 @@ typedef struct rBufferLite {
 } rBufferLite;
 
 int r_lua_newbuffer (lua_State *L);
+int r_lua_buffreset (lua_State *L, int pos);
 int r_lua_getdata (lua_State *L);
 int r_lua_add (lua_State *L);
 int r_lua_writedata(lua_State *L);
 
 rBuffer *r_newbuffer (lua_State *L);
 rBuffer *r_newbuffer_wrap (lua_State *L, char *data, size_t len);
-
-int r_buffsub (lua_State *L);
 
 /* the functions below DO NOT use the stack */
 char *r_prepbuffsize (lua_State *L, rBuffer *buf, size_t sz);

@@ -84,7 +84,13 @@ static int buffsize (lua_State *L) {
   return 1;
 }
 
-int r_buffsub (lua_State *L) {
+int r_lua_buffreset (lua_State *L, int pos) {
+  rBuffer *buf = (rBuffer *)luaL_checkudata(L, pos, ROSIE_BUFFER);
+  buf->n = 0;
+  return 0;
+}
+
+static int r_buffsub (lua_State *L) {
   rBuffer *buf;
   int j = 1;
   int k = luaL_checkinteger(L, -1);

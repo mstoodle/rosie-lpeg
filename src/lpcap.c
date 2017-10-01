@@ -766,11 +766,37 @@ static const char *r_status_messages[] = {
 #define ENCODE_BYTE 0
 #define ENCODE_JSON 1
 #define ENCODE_INPUT 2
+
+static int dummy[1];
+static void *output_buffer_key = (void *)&dummy[0];
+
+static rBuffer *getbuffer(lua_State *L) {
+  rBuffer *buf;
+  int t;
+  /* TODO: IF we are reusing the buffer, AND there is one already, then */
+  /* reset it for use */
+  lua_pushlightuserdata(L, output_buffer_key);
+  t = lua_gettable(L, LUA_REGISTRYINDEX);
+  if (t == LUA_TUSERDATA) {
+    r_lua_buffreset(L, -1);
+    return lua_touserdata(L, -1);
+  }
+  /* else make a new one, and IF we are resuing the buffer, save it */
+  fprintf(stderr, "Making a new output buffer\n"); fflush(NULL);
+  buf = r_newbuffer(L);
+  lua_pushlightuserdata(L, output_buffer_key);
+  lua_pushvalue(L, -2);		/* Push copy of output buffer */
+  lua_settable(L, LUA_REGISTRYINDEX);
+  /* Leave output buffer on top of stack, just like r_newbuffer does */
+  return buf;
+}
+     
+
 int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int etype, size_t len) {
   int err;
   encoder_functions encode;
   Capture *capture = (Capture *)lua_touserdata(L, caplistidx(ptop));
-  rBuffer *buf = r_newbuffer(L);
+  rBuffer *buf = getbuffer(L);
   int abend = 0;		/* 0 => normal completion; 1 => halt */
   switch (etype) {
   case ENCODE_DEBUG: { encode = debug_encoder; break; } /* Debug output */
