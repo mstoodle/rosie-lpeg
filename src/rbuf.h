@@ -18,7 +18,9 @@
  * there.
  */
 
-/* buffer for arbitrary char data, grows and shrinks */
+/* Buffer for arbitrary char data, can grow and shrink by calling
+ * resize().  Will be garbage collected by Lua.  Has an initial
+ * storage area pre-allocated (initb).  */
 typedef struct rBuffer {
   char *data;
   size_t capacity;
@@ -26,12 +28,22 @@ typedef struct rBuffer {
   char initb[R_BUFFERSIZE];	/* initial buffer */
 } rBuffer;
 
+typedef struct rBufferLite {
+  char *data;
+  size_t capacity;
+  size_t n;			/* number of bytes in use */
+  char *initb;	                /* no initial buffer */
+} rBufferLite;
+
 int r_lua_newbuffer (lua_State *L);
 int r_lua_getdata (lua_State *L);
 int r_lua_add (lua_State *L);
 int r_lua_writedata(lua_State *L);
 
 rBuffer *r_newbuffer (lua_State *L);
+rBuffer *r_newbuffer_wrap (lua_State *L, char *data, size_t len);
+
+int r_buffsub (lua_State *L);
 
 /* the functions below DO NOT use the stack */
 char *r_prepbuffsize (lua_State *L, rBuffer *buf, size_t sz);

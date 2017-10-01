@@ -173,12 +173,6 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
 #endif
     assert(stackidx(ptop) + ndyncap == lua_gettop(L) && ndyncap <= captop);
     switch ((Opcode)p->i.code) {
-      case IHalt: {				    /* rosie */
-	/* TODO: unwind the stack? Is there any info there that we want?*/
-        capture[captop].kind = Cfinal;
-        capture[captop].s = s;
-        return s;
-      }
       case IEnd: {
         assert(stack == getstackbase(L, ptop) + 1);
 	/* this Cclose capture is a sentinel to mark the end of the linked caplist */
@@ -360,6 +354,12 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
         }
         p++;
         continue;
+      }
+      case IHalt: {				    /* rosie */
+	/* FUTURE: Maybe unwind the stack, if there is any info there that we could use? */
+        capture[captop].kind = Cfinal;
+        capture[captop].s = s;
+        return s;
       }
       default: assert(0); return NULL;
     }

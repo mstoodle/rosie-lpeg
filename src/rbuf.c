@@ -18,13 +18,6 @@
 /* dynamically allocate storage to replace initb when initb becomes too small */
 /* returns pointer to start of new buffer */
 static void *resizebuf (lua_State *L, rBuffer *buf, size_t newsize) {
-  /* void *temp; */
-  /* temp = realloc((void *)buf->data, (newsize * sizeof(char))); */
-  /* if (temp == NULL) { */
-  /*   free(buf->data); */
-  /*   buf->data = NULL; buf->capacity=0; buf->n=0; */
-  /*   luaL_error(L, "not enough memory for buffer expansion"); */
-  /* } */
   void *ud;
   lua_Alloc allocf = lua_getallocf(L, &ud);
   void *temp = allocf(ud, buf->data, buf->capacity, newsize);
@@ -81,7 +74,6 @@ static int buffgc (lua_State *L) {
   fprintf(stderr, "*** freeing rbuffer->data %p (capacity was %ld)\n", (void *)(buf->data), buf->capacity); 
 #endif 
   resizebuf(L, buf, 0);
-  /* free((void *)buf->data);	/\* free dynamically allocated data *\/  */
   } 
   return 0;
 }
@@ -92,23 +84,77 @@ static int buffsize (lua_State *L) {
   return 1;
 }
 
+int r_buffsub (lua_State *L) {
+  rBuffer *buf;
+  int j = 1;
+  int k = luaL_checkinteger(L, -1);
+  int two_indices = lua_isinteger(L, -2);
+  if (two_indices) {
+    j = lua_tointeger(L, -2);
+    buf = (rBuffer *)luaL_checkudata(L, -3, ROSIE_BUFFER);
+    lua_pop(L, 3);
+  }
+  else {
+    j = k;
+    buf = (rBuffer *)luaL_checkudata(L, -2, ROSIE_BUFFER);
+    k = buf->n;
+    lua_pop(L, 2);
+  }
+  /* These are the rules of string.sub according to the Lua 5.3 reference */
+  if (j < 0) j = buf->n + j + 1;
+  if (j < 1) j = 1;
+  if (k < 0) k = buf->n + k + 1;
+  if (k > (int) buf->n) k = buf->n;
+  if ((j > k) || (j > (int) buf->n)) {
+    lua_pushliteral(L, "");
+  }
+  else {
+    lua_pushlstring(L, (buf->data + j - 1), (size_t) k - j + 1);
+  }
+  return 1;
+}
+
+static struct luaL_Reg rbuf_meta_reg[] = {
+    {"__gc", buffgc},
+    {"__len", buffsize},
+    {NULL, NULL}
+};
+
+static struct luaL_Reg rbuf_index_reg[] = {
+    {"sub", r_buffsub},
+    {NULL, NULL}
+};
+
+static void rbuf_type_init(lua_State *L) {
+  /* Enter with a new metatable on the stack */
+  int top = lua_gettop(L);
+  luaL_setfuncs(L, rbuf_meta_reg, 0);
+  luaL_newlib(L, rbuf_index_reg);
+  lua_pushvalue(L, -1);
+  lua_setfield(L, -3, "__index");
+  lua_settop(L, top);
+  /* Must leave the metatable on the stack */
+}
+
 rBuffer *r_newbuffer (lua_State *L) {
   rBuffer *buf = (rBuffer *)lua_newuserdata(L, sizeof(rBuffer));
   buf->data = buf->initb;       /* intially, data storage is statically allocated in initb  */
   buf->n = 0;			/* contents length is 0 */
   buf->capacity = R_BUFFERSIZE;	/* size of initb */
-  if (luaL_newmetatable(L, ROSIE_BUFFER)) {
-    /* first time:  
-         enters ROSIE_BUFFER into registry;  
-         creates new metatable for ROSIE_BUFFER objects (on stack); 
-       otherwise: 
-         puts the ROSIE_BUFFER entry from the registry on the stack; 
-    */ 
-    lua_pushcfunction(L, buffgc);  
-    lua_setfield(L, -2, "__gc");  
-    lua_pushcfunction(L, buffsize); 
-    lua_setfield(L, -2, "__len"); 
-  }
+  if (luaL_newmetatable(L, ROSIE_BUFFER)) rbuf_type_init(L);
+  /* set the new userdata's metatable to the one for ROSIE_BUFFER objects  */
+  lua_setmetatable(L, -2);	/* pops the metatable, leaving the userdata at the top */
+  return buf;
+}
+
+rBuffer *r_newbuffer_wrap (lua_State *L, char *data, size_t len) {
+  rBufferLite *buflite = (rBufferLite *)lua_newuserdata(L, sizeof(rBufferLite));
+  rBuffer *buf = (rBuffer *)buflite;
+  buflite->initb = data;
+  buf->data = data;
+  buf->n = len;
+  buf->capacity = len;
+  if (luaL_newmetatable(L, ROSIE_BUFFER)) rbuf_type_init(L);
   /* set the new userdata's metatable to the one for ROSIE_BUFFER objects  */
   lua_setmetatable(L, -2);	/* pops the metatable, leaving the userdata at the top */
   return buf;

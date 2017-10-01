@@ -1221,10 +1221,21 @@ int r_match (lua_State *L) {
   const char *s;
   size_t i;
   int ptop;
+  rBuffer *buf;
+  
   t0 = (lua_Integer) clock();
   p = (getpatt(L, 1, NULL), getpattern(L, 1));
   code = (p->code != NULL) ? p->code : prepcompile(L, p, 1);
-  s = luaL_checklstring(L, SUBJIDX, &l);
+
+  /* Accept Lua string or ROSIE_BUFFER for input */
+  buf = (rBuffer *)luaL_testudata(L, SUBJIDX, ROSIE_BUFFER);
+  if (buf) {
+       s = buf->data;
+       l = buf->n;
+  }
+  else {
+       s = luaL_checklstring(L, SUBJIDX, &l);
+  }
   if (l > INT_MAX) luaL_error(L, "input string too long");
   i = initposition(L, l, SUBJIDX+1);
   encoding = luaL_optinteger(L, SUBJIDX+2, 0);
