@@ -782,7 +782,7 @@ static rBuffer *getbuffer(lua_State *L) {
     return lua_touserdata(L, -1);
   }
   /* else make a new one, and IF we are resuing the buffer, save it */
-  fprintf(stderr, "Making a new output buffer\n"); fflush(NULL);
+  /* fprintf(stderr, "Making a new output buffer\n"); fflush(NULL); */
   buf = r_newbuffer(L);
   lua_pushlightuserdata(L, output_buffer_key);
   lua_pushvalue(L, -2);		/* Push copy of output buffer */
