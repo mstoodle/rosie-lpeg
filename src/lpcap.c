@@ -843,7 +843,7 @@ int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int etyp
       }
   }
 done:
-  lua_pushinteger(L, r - s + 1); /* last position */
+  lua_pushinteger(L, (int) len - (r - s)); /* leftover chars */
   lua_pushboolean(L, abend);
   return 3;			 /* N.B. an rBuffer is on the stack */
 }

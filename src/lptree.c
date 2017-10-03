@@ -1204,6 +1204,11 @@ static int lp_match (lua_State *L) {
   return getcaptures(L, s, r, ptop);
 }
 
+typedef uint8_t * byte_ptr;
+typedef struct rosie_string {
+     uint32_t len;
+     byte_ptr ptr;
+} rstr;
 
 /* required args: peg, input
  * optional args: start position, encoding type, total time accumulator, lpeg time accumulator
@@ -1212,7 +1217,7 @@ static int lp_match (lua_State *L) {
 */
 int r_match (lua_State *L) {
   Capture capture[INITCAPSIZE];
-  int n, encoding;
+  int n, encoding, input_type;
   lua_Integer t0, tmatch, tfinal, duration0, duration1;
   const char *r;
   size_t l;
@@ -1221,21 +1226,38 @@ int r_match (lua_State *L) {
   const char *s;
   size_t i;
   int ptop;
-  rBuffer *buf;
+  void *buf;
   
   t0 = (lua_Integer) clock();
   p = (getpatt(L, 1, NULL), getpattern(L, 1));
   code = (p->code != NULL) ? p->code : prepcompile(L, p, 1);
 
-  /* Accept Lua string or ROSIE_BUFFER for input */
-  buf = (rBuffer *)luaL_testudata(L, SUBJIDX, ROSIE_BUFFER);
-  if (buf) {
-       s = buf->data;
-       l = buf->n;
+  /* Accept Lua string or rosie_string or ROSIE_BUFFER for input */
+  /* TODO: Refactor so that only librosie can call here with a rosie_string, NOT Lua CODE! */
+  input_type = lua_type(L, SUBJIDX);
+  switch (input_type) {
+  case LUA_TLIGHTUSERDATA: {
+    buf = lua_touserdata(L, SUBJIDX);
+    if (!buf) return 0;		/* TODO: how to signal a fatal error? */
+    s = (char *) ((rstr *)buf)->ptr;
+    l = ((rstr *)buf)->len;
+    break;
   }
-  else {
-       s = luaL_checklstring(L, SUBJIDX, &l);
+  case LUA_TUSERDATA: {
+    buf = luaL_testudata(L, SUBJIDX, ROSIE_BUFFER);
+    if (!buf) return 0;		/* TODO: how to signal a fatal error? */
+    s = ((rBuffer *)buf)->data;
+    l = ((rBuffer *)buf)->n;
+    break;
   }
+  case LUA_TSTRING: { 
+    s = luaL_checklstring(L, SUBJIDX, &l);
+    break;
+  }
+  default: 
+    return luaL_argerror(L, SUBJIDX, "not rbuffer, rstr, or lua string");
+  }
+      
   if (l > INT_MAX) luaL_error(L, "input string too long");
   i = initposition(L, l, SUBJIDX+1);
   encoding = luaL_optinteger(L, SUBJIDX+2, 0);
