@@ -1268,7 +1268,7 @@ static int do_r_match (lua_State *L, int from_lua) {
   r = match(L, s, s + i, s + l, code, capture, ptop);
   tmatch = (lua_Integer) clock();
   if (r == NULL) {
-    lua_pushnil(L);
+    lua_pushboolean(L, 0);	/* false, i.e. no match */
     lua_pushinteger(L, l);	/* leftover value is len */
     lua_pushboolean(L, 0);	/* dummy, so that there are always 5 return values */
     lua_pushinteger(L, (tmatch-t0)+duration0); /* total time (no capture processing) */
