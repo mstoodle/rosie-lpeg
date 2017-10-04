@@ -283,7 +283,7 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
       case IFailTwice:
         assert(stack > getstackbase(L, ptop));
         stack--;
-        /* go through */
+	__attribute__ ((fallthrough));
       case IFail:
       fail: { /* pattern failed: try to backtrack */
         do {  /* remove pending calls */

@@ -18,7 +18,7 @@
 #include "lpprint.h"
 #include "lptree.h"
 
-#include "rbuf.h"
+#include "rpeg.h"
 
 /* number of siblings for each tree */
 const byte numsiblings[] = {
@@ -1204,18 +1204,14 @@ static int lp_match (lua_State *L) {
   return getcaptures(L, s, r, ptop);
 }
 
-typedef uint8_t * byte_ptr;
-typedef struct rosie_string {
-     uint32_t len;
-     byte_ptr ptr;
-} rstr;
-
 /* required args: peg, input
  * optional args: start position, encoding type, total time accumulator, lpeg time accumulator
  * encoding types: debug (-1), byte array (0), json (1), input (2)
  * RESTRICTION: only a limited set of capture types are supported
 */
-int r_match (lua_State *L) {
+
+/* inline? */
+static int do_r_match (lua_State *L, int from_lua) {
   Capture capture[INITCAPSIZE];
   int n, encoding, input_type;
   lua_Integer t0, tmatch, tfinal, duration0, duration1;
@@ -1232,11 +1228,12 @@ int r_match (lua_State *L) {
   p = (getpatt(L, 1, NULL), getpattern(L, 1));
   code = (p->code != NULL) ? p->code : prepcompile(L, p, 1);
 
-  /* Accept Lua string or rosie_string or ROSIE_BUFFER for input */
-  /* TODO: Refactor so that only librosie can call here with a rosie_string, NOT Lua CODE! */
+  /* From lua code, accept Lua string or ROSIE_BUFFER for input */
+  /* Only C code, like librosie, can call here with a rosie_string. */
   input_type = lua_type(L, SUBJIDX);
   switch (input_type) {
   case LUA_TLIGHTUSERDATA: {
+    if (from_lua) return luaL_argerror(L, SUBJIDX, "lightuserdata prohibited");
     buf = lua_touserdata(L, SUBJIDX);
     if (!buf) return 0;		/* TODO: how to signal a fatal error? */
     s = (char *) ((rstr *)buf)->ptr;
@@ -1255,7 +1252,7 @@ int r_match (lua_State *L) {
     break;
   }
   default: 
-    return luaL_argerror(L, SUBJIDX, "not rbuffer, rstr, or lua string");
+    return luaL_argerror(L, SUBJIDX, from_lua ? "not rbuffer or lua string" : "not rbuffer, rstr, or lua string");
   }
       
   if (l > INT_MAX) luaL_error(L, "input string too long");
@@ -1284,6 +1281,15 @@ int r_match (lua_State *L) {
   lua_pushinteger(L, (tfinal-t0)+duration0); /* total time (includes capture processing) */
   lua_pushinteger(L, (tmatch-t0)+duration1); /* match time (includes lpeg overhead) */
   return n+2;				     /* success => 3 values on the stack */
+}
+
+int r_match_lua (lua_State *L);
+int r_match_lua (lua_State *L) {
+  return do_r_match(L, 1);
+}
+
+int r_match_C (lua_State *L) {
+  return do_r_match(L, 0);
 }
 
 /*
@@ -1387,7 +1393,7 @@ static struct luaL_Reg pattreg[] = {
   /* Rosie-specific functions below */
   {"rcap", r_capture},
   {"rconstcap", r_constcapture},
-  {"rmatch", r_match},
+  {"rmatch", r_match_lua},
   {"newbuffer", r_lua_newbuffer},
   {"getdata", r_lua_getdata},
   {"writedata", r_lua_writedata},

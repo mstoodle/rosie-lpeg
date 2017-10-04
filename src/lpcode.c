@@ -334,7 +334,7 @@ static int getfirst (TTree *tree, const Charset *follow, Charset *firstset) {
         cs_complement(firstset);
         return 1;
       }
-      /* else go through */
+      __attribute__ ((fallthrough));
     }
     case TBehind: {  /* instruction gives no new information */
       /* call 'getfirst' only to check for math-time captures */

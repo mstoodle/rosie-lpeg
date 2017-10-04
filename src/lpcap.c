@@ -348,7 +348,14 @@ int runtimecap (CapState *cs, Capture *close, const char *s, int *rem) {
   cs->cap = open; cs->valuecached = 0;  /* prepare capture state */
   luaL_checkstack(L, 4, "too many runtime captures");
   pushluaval(cs);  /* push function to be called */
+
+  /* 
+   * Wednesday, October 4, 2017 
+   * THE INPUT MAY HAVE THE FORM OF LIGHTUSERDATA POINTING TO A ROSIE
+   * STRING, MAKING IT USELESS TO AN ARBITRARY LUA FUNCTION.
+   */
   lua_pushvalue(L, SUBJIDX);  /* push original subject */
+
   lua_pushinteger(L, s - cs->s + 1);  /* push current position */
   n = pushnestedvalues(cs, 0);  /* push nested captures */
   lua_call(L, n + 2, LUA_MULTRET);  /* call dynamic function */
