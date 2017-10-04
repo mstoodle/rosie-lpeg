@@ -29,6 +29,7 @@ CWARNS = -Wall -Wextra -pedantic \
 	-Wnested-externs \
 	-Wstrict-prototypes \
         -Wunreachable-code \
+        -Wno-missing-declarations \
 
 
 CFLAGS = $(CWARNS) $(COPT) -std=c99 -I$(LUADIR)/include -fPIC
