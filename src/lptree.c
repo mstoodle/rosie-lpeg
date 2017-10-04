@@ -1257,7 +1257,7 @@ static int do_r_match (lua_State *L, int from_lua) {
       
   if (l > INT_MAX) luaL_error(L, "input string too long");
   i = initposition(L, l, SUBJIDX+1);
-  encoding = luaL_optinteger(L, SUBJIDX+2, 0);
+  encoding = luaL_optinteger(L, SUBJIDX+2, ENCODE_BYTE);
   duration0 = luaL_optinteger(L, SUBJIDX+3, 0);	/* total time accumulator */
   duration1 = luaL_optinteger(L, SUBJIDX+4, 0); /* total time without post-processing */
   /* prepare for matching */

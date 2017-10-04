@@ -12,8 +12,8 @@
 #include <string.h>
 #include <time.h>
 
-#include "rbuf.h"
 #include "rcap.h"
+#include "rpeg.h"
 
 #define closeaddr(c)	((c)->s + (c)->siz - 1)
 
@@ -769,11 +769,6 @@ static const char *r_status_messages[] = {
 
 #define n_messages ((int) ((sizeof r_status_messages) / sizeof (const char *)))
 
-#define ENCODE_DEBUG -1
-#define ENCODE_BYTE 0
-#define ENCODE_JSON 1
-#define ENCODE_INPUT 2
-
 static int dummy[1];
 static void *output_buffer_key = (void *)&dummy[0];
 
@@ -809,7 +804,7 @@ int r_getcaptures(lua_State *L, const char *s, const char *r, int ptop, int etyp
   case ENCODE_DEBUG: { encode = debug_encoder; break; } /* Debug output */
   case ENCODE_BYTE: { encode = byte_encoder; break; }   /* Byte array (compact) */
   case ENCODE_JSON: { encode = json_encoder; break; }   /* JSON string */
-  case ENCODE_INPUT: { r_addlstring(L, buf, s, len); goto done; } /* Put the entire input into buf, and we are done */
+  case ENCODE_LINE: { r_addlstring(L, buf, s, len); goto done; } /* Put the entire input into buf, and we are done */
   default: { return luaL_error(L, "invalid encoding value: %d", etype); }
   }
   if (isfinalcap(capture)) {
