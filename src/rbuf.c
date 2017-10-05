@@ -144,24 +144,23 @@ static void rbuf_type_init(lua_State *L) {
 
 rBuffer *r_newbuffer (lua_State *L) {
   rBuffer *buf = (rBuffer *)lua_newuserdata(L, sizeof(rBuffer));
-  buf->data = buf->initb;       /* intially, data storage is statically allocated in initb  */
-  buf->n = 0;			/* contents length is 0 */
-  buf->capacity = R_BUFFERSIZE;	/* size of initb */
+  buf->initb = buf->initialbuff; /* the extra pointer to initialbuff enables r_newbuffer_wrap */
+  buf->data = buf->initb;        /* intially, data storage is statically allocated in initb  */
+  buf->n = 0;			 /* contents length is 0 */
+  buf->capacity = R_BUFFERSIZE;	 /* size of initb */
   if (luaL_newmetatable(L, ROSIE_BUFFER)) rbuf_type_init(L);
-  /* set the new userdata's metatable to the one for ROSIE_BUFFER objects  */
-  lua_setmetatable(L, -2);	/* pops the metatable, leaving the userdata at the top */
+  lua_setmetatable(L, -2);	 /* pops the metatable, leaving the userdata at the top */
   return buf;
 }
 
 rBuffer *r_newbuffer_wrap (lua_State *L, char *data, size_t len) {
   rBufferLite *buflite = (rBufferLite *)lua_newuserdata(L, sizeof(rBufferLite));
   rBuffer *buf = (rBuffer *)buflite;
-  buflite->initb = data;
+  buf->initb = data;
   buf->data = data;
   buf->n = len;
   buf->capacity = len;
   if (luaL_newmetatable(L, ROSIE_BUFFER)) rbuf_type_init(L);
-  /* set the new userdata's metatable to the one for ROSIE_BUFFER objects  */
   lua_setmetatable(L, -2);	/* pops the metatable, leaving the userdata at the top */
   return buf;
 }

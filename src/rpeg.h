@@ -7,6 +7,9 @@
 /*  AUTHOR: Jamie A. Jennings                                                */
 
 
+#if !defined(rpeg_h)
+#define rpeg_h
+
 #include "rbuf.h"
 
 typedef uint8_t * byte_ptr;
@@ -27,6 +30,7 @@ typedef struct r_encoder_type {
 #define ENCODE_LINE 2
 #define ENCODE_BYTE 3
 
+__attribute__((unused))
 static r_encoder_t r_encoders[] = { 
      {"json",   ENCODE_JSON},
      {"line",   ENCODE_LINE},
@@ -36,3 +40,5 @@ static r_encoder_t r_encoders[] = {
 };
 
 int r_match_C (lua_State *L);
+
+#endif

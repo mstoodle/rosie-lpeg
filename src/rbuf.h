@@ -25,7 +25,8 @@ typedef struct rBuffer {
   char *data;
   size_t capacity;
   size_t n;			/* number of bytes in use */
-  char initb[R_BUFFERSIZE];	/* initial buffer */
+  char *initb;
+  char initialbuff[R_BUFFERSIZE];
 } rBuffer;
 
 typedef struct rBufferLite {
