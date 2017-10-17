@@ -280,8 +280,8 @@ static int getfirst (TTree *tree, const Charset *follow, Charset *firstset) {
       return 0;
     }
     case THalt: {		/* rosie */
-      loopset(i, firstset->cs[i] = follow->cs[i]);
-      return 1;  /* accepts the empty string */
+      loopset(i, firstset->cs[i] = follow->cs[i]); 
+      return 1;
     }
     case TChoice: {
       Charset csaux;
@@ -354,10 +354,10 @@ static int getfirst (TTree *tree, const Charset *follow, Charset *firstset) {
 static int headfail (TTree *tree) {
  tailcall:
   switch (tree->tag) {
-    case TChar: case TSet: case TAny: case TFalse: case THalt: /* rosie adds THalt */
+    case TChar: case TSet: case TAny: case TFalse:
       return 1;
     case TTrue: case TRep: case TRunTime: case TNot:
-    case TBehind:
+    case TBehind:  case THalt:	/* rosie adds THalt */
       return 0;
     case TCapture: case TGrammar: case TRule: case TAnd:
       tree = sib1(tree); goto tailcall;  /* return headfail(sib1(tree)); */
@@ -653,11 +653,12 @@ static void codebehind (CompileState *compst, TTree *tree) {
 */
 static void codechoice (CompileState *compst, TTree *p1, TTree *p2, int opt,
                         const Charset *fl) {
+  int haltp2 = (p2->tag == THalt);
   int emptyp2 = (p2->tag == TTrue);
   Charset cs1, cs2;
   int e1 = getfirst(p1, fullset, &cs1);
-  if (headfail(p1) ||
-      (!e1 && (getfirst(p2, fl, &cs2), cs_disjoint(&cs1, &cs2)))) {
+  if (!haltp2 && (headfail(p1) ||
+		  (!e1 && (getfirst(p2, fl, &cs2), cs_disjoint(&cs1, &cs2))))) {
     /* <p1 / p2> == test (fail(p1)) -> L1 ; p1 ; jmp L2; L1: p2; L2: */
     int test = codetestset(compst, &cs1, 0);
     int jmp = NOINST;
@@ -668,7 +669,7 @@ static void codechoice (CompileState *compst, TTree *p1, TTree *p2, int opt,
     codegen(compst, p2, opt, NOINST, fl);
     jumptohere(compst, jmp);
   }
-  else if (opt && emptyp2) {
+  else if (!haltp2 && opt && emptyp2) {
     /* p1? == IPartialCommit; p1 */
     jumptohere(compst, addoffsetinst(compst, IPartialCommit));
     codegen(compst, p1, 1, NOINST, fullset);

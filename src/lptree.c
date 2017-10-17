@@ -542,7 +542,8 @@ static int lp_seq (lua_State *L) {
   TTree *tree1 = getpatt(L, 1, NULL);
   TTree *tree2 = getpatt(L, 2, NULL);
   /* rosie adds THalt, which behaves like TFalse in this case */
-  if (tree1->tag == THalt || tree1->tag == TFalse || tree2->tag == TTrue)
+/*   if (tree1->tag == THalt || tree1->tag == TFalse || tree2->tag == TTrue) */
+  if (tree1->tag == TFalse || tree2->tag == TTrue)
     lua_pushvalue(L, 1);  /* false . x == false, x . true = x */
   else if (tree1->tag == TTrue)
     lua_pushvalue(L, 2);  /* true . x = x */
@@ -558,9 +559,7 @@ static int lp_seq (lua_State *L) {
 ** true / x => true, x / false => x, false / x => x
 ** (x / true is not equivalent to true)
 */
-/* for rosie's THalt, we could do this one optimization, but we are
- * not doing it now: THalt / x => THalt
- */
+/* for rosie's THalt, we could in future do this optimization: THalt / x => THalt */
 static int lp_choice (lua_State *L) {
   Charset st1, st2;
   TTree *t1 = getpatt(L, 1, NULL);
