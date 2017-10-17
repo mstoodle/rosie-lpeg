@@ -1,4 +1,4 @@
-/*  -*- Mode: C/l; -*-                                                       */
+/*  -*- Mode: C; -*-                                                         */
 /*                                                                           */
 /*  rbuf.c   Custom version of luaL_Buffer                                   */
 /*                                                                           */
@@ -120,9 +120,12 @@ static int r_buffsub (lua_State *L) {
   return 1;
 }
 
+int r_lua_getdata (lua_State *L);
+
 static struct luaL_Reg rbuf_meta_reg[] = {
     {"__gc", buffgc},
     {"__len", buffsize},
+    {"__tostring", r_lua_getdata},
     {NULL, NULL}
 };
 
