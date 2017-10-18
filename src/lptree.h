@@ -43,7 +43,7 @@ extern const byte numsiblings[];
 typedef struct TTree {
   byte tag;
   byte cap;  /* kind of capture (if it is a capture) */
-  unsigned short key;  /* key in ktable for Lua data (0 if no key) */
+  capidx_t key;  /* key in ktable for Lua data (0 if no key) */
   union {
     int ps;  /* occasional second sibling */
     int n;  /* occasional counter */

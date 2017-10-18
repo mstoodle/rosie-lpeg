@@ -23,8 +23,6 @@ typedef struct r_encoder_type {
   int code;
 } r_encoder_t;
 
-#define MAX_ENCODER_NAME_LENGTH 64
-
 #define ENCODE_DEBUG -1
 #define ENCODE_JSON 1
 #define ENCODE_LINE 2

@@ -17,8 +17,8 @@ typedef enum CapKind {
 
 typedef struct Capture {
   const char *s;  /* subject position */
-  unsigned short idx;  /* extra info (group name, arg index, etc.) */
-  /* unsigned short flags;		/\* rosie extension *\/ */
+/*   unsigned short idx;  /\* extra info (group name, arg index, etc.) *\/ */
+  capidx_t idx;  /* extra info (group name, arg index, etc.) */
   byte kind;  /* kind of capture */
   byte siz;  /* size of full capture + 1 (0 = not a full capture) */
 } Capture;
@@ -36,7 +36,7 @@ typedef struct CapState {
 
 int runtimecap (CapState *cs, Capture *close, const char *s, int *rem);
 int getcaptures (lua_State *L, const char *s, const char *r, int ptop);
-int finddyncap (Capture *cap, Capture *last);
+capidx_t finddyncap (Capture *cap, Capture *last);
 
 #define isfinalcap(cap)	(captype(cap) == Cfinal)
 #define isclosecap(cap)	(captype(cap) == Cclose)
@@ -49,7 +49,7 @@ int finddyncap (Capture *cap, Capture *last);
 
 #include "rbuf.h"
 
-#define R_MAXDEPTH 200	/* max nesting depth for patterns */
+#define R_MAXDEPTH USHRT_MAX	/* max nesting depth for patterns (was 200) */
 
 typedef struct {  
   int (*Open)(CapState *cs, rBuffer *buf, int count);

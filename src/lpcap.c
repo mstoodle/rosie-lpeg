@@ -26,8 +26,8 @@
 ** Put at the cache for Lua values the value indexed by 'v' in ktable
 ** of the running pattern (if it is not there yet); returns its index.
 */
-static int updatecache (CapState *cs, int v) {
-  int idx = cs->ptop + 1;  /* stack index of cache for Lua values */
+static capidx_t updatecache (CapState *cs, int v) {
+  capidx_t idx = cs->ptop + 1;  /* stack index of cache for Lua values */
   if (v != cs->valuecached) {  /* not there? */
     getfromktable(cs, v);  /* get value from 'ktable' */
     lua_replace(cs->L, idx);  /* put it at reserved stack position */
@@ -246,7 +246,7 @@ static int tablecap (CapState *cs) {
 ** Table-query capture
 */
 static int querycap (CapState *cs) {
-  int idx = cs->cap->idx;
+  capidx_t idx = cs->cap->idx;
   pushonenestedvalue(cs);  /* get nested capture */
   lua_gettable(cs->L, updatecache(cs, idx));  /* query cap. value at table */
   if (!lua_isnil(cs->L, -1))
@@ -264,7 +264,7 @@ static int querycap (CapState *cs) {
 static int foldcap (CapState *cs) {
   int n;
   lua_State *L = cs->L;
-  int idx = cs->cap->idx;
+  capidx_t idx = cs->cap->idx;
   if (isfullcap(cs->cap++) ||  /* no nested captures? */
       isclosecap(cs->cap) ||  /* no nested captures (large subject)? */
       (n = pushcapture(cs)) == 0)  /* nested captures with no values? */
@@ -299,13 +299,13 @@ static int functioncap (CapState *cs) {
 ** Select capture
 */
 static int numcap (CapState *cs) {
-  int idx = cs->cap->idx;  /* value to select */
+  capidx_t idx = cs->cap->idx;  /* value to select */
   if (idx == 0) {  /* no values? */
     nextcap(cs);  /* skip entire capture */
     return 0;  /* no value produced */
   }
   else {
-    int n = pushnestedvalues(cs, 0);
+    capidx_t n = pushnestedvalues(cs, 0);
     if (n < idx)  /* invalid index? */
       return luaL_error(cs->L, "no capture '%d'", idx);
     else {
@@ -322,7 +322,7 @@ static int numcap (CapState *cs) {
 ** Return the stack index of the first runtime capture in the given
 ** list of captures (or zero if no runtime captures)
 */
-int finddyncap (Capture *cap, Capture *last) {
+capidx_t finddyncap (Capture *cap, Capture *last) {
   for (; cap < last; cap++) {
     if (cap->kind == Cruntime)
       return cap->idx;  /* stack position of first capture */
@@ -337,7 +337,8 @@ int finddyncap (Capture *cap, Capture *last) {
 ** on the Lua stack.)
 */
 int runtimecap (CapState *cs, Capture *close, const char *s, int *rem) {
-  int n, id;
+  int n;
+  capidx_t id;
   lua_State *L = cs->L;
   int otop = lua_gettop(L);
   Capture *open = findopen(close);
@@ -530,8 +531,8 @@ static int pushcapture (CapState *cs) {
     /*   return 1; */
     /* } */
     case Carg: {
-      int arg = (cs->cap++)->idx;
-      if (arg + FIXEDARGS > cs->ptop)
+      capidx_t arg = (cs->cap++)->idx;
+      if (arg + FIXEDARGS > (capidx_t) cs->ptop)
         return luaL_error(L, "reference to absent extra argument #%d", arg);
       lua_pushvalue(L, arg + FIXEDARGS);
       return 1;

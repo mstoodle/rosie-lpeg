@@ -51,7 +51,7 @@
 
 /* default maximum size for call/backtrack stack */
 #if !defined(MAXBACK)
-#define MAXBACK         1000	/* Rosie */
+#define MAXBACK         16768  /* (at most can be USHRT_MAX) Rosie */
 #endif
 
 
@@ -60,6 +60,10 @@
 #define MAXRULES        1000
 #endif
 
+#define MAXCAPIDX USHRT_MAX
+typedef unsigned short capidx_t; 
+/* #define MAXCAPIDX 2,147,483,647 */
+/* typedef int capidx_t; */
 
 
 /* initial size for capture's list */
@@ -123,7 +127,7 @@ typedef struct Charset {
 
 
 /* maximum number of bytes to look behind */
-#define MAXBEHIND	8000	/* MAXAUX at most (stored in aux field of instruction) */
+#define MAXBEHIND	0x7FFF	/* MAXAUX at most (stored in aux field of instruction) */
 
 
 /* maximum size (in elements) for a pattern */

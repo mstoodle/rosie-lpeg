@@ -141,6 +141,7 @@ static void finalfix (lua_State *L, int postable, TTree *g, TTree *t) {
 **
 ** - The maximum index in a ktable is USHRT_MAX, because trees and
 ** patterns use unsigned shorts to store those indices.
+**   --> Rosie change: maximum index is MAXCAPIDX
 ** ====================================================================
 */
 
@@ -166,7 +167,7 @@ static int addtoktable (lua_State *L, int idx) {
     int n;
     lua_getuservalue(L, -1);  /* get ktable from pattern */
     n = lua_rawlen(L, -1);
-    if (n >= USHRT_MAX)
+    if (n >= MAXCAPIDX)
       luaL_error(L, "too many Lua values in pattern");
     lua_pushvalue(L, idx);  /* element to be added */
     lua_rawseti(L, -2, ++n);
@@ -198,7 +199,7 @@ static int concattable (lua_State *L, int idx1, int idx2) {
   int i;
   int n1 = ktablelen(L, idx1);
   int n2 = ktablelen(L, idx2);
-  if (n1 + n2 > USHRT_MAX)
+  if (n1 + n2 > MAXCAPIDX)
     luaL_error(L, "too many Lua values in pattern");
   if (n1 == 0) return 0;  /* nothing to correct */
   for (i = 1; i <= n1; i++) {
@@ -868,6 +869,20 @@ static int lp_matchtime (lua_State *L) {
 }
 
 
+static int r_pattern_size (lua_State *L) {
+  Pattern *p = getpattern(L, 1);
+  size_t without_code = lua_rawlen(L, 1);
+  size_t codesize = p->codesize * sizeof(Instruction);
+  lua_pushinteger(L, without_code + codesize);
+  return 1;
+}
+
+static int r_userdata_size (lua_State *L) {
+  luaL_checktype(L, 1, LUA_TUSERDATA);
+  lua_pushinteger(L, lua_rawlen(L, 1));
+  return 1;
+}
+
 /* rosie capture */
 static int r_capture (lua_State *L) {
   size_t len;
@@ -1376,7 +1391,6 @@ static struct luaL_Reg pattreg[] = {
   {"Cb", lp_backref},
   {"Carg", lp_argcapture},
   {"Cp", lp_poscapture},
-  /* rosie removes Csubst */
   /* {"Cs", lp_substcapture}, */
   {"Ct", lp_tablecapture},
   {"Cf", lp_foldcapture},
@@ -1390,6 +1404,8 @@ static struct luaL_Reg pattreg[] = {
   {"setmaxstack", lp_setmax},
   {"type", lp_type},
   /* Rosie-specific functions below */
+  {"usize", r_userdata_size},
+  {"psize", r_pattern_size},
   {"rcap", r_capture},
   {"rconstcap", r_constcapture},
   {"rmatch", r_match_lua},

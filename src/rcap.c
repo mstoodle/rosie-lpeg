@@ -285,7 +285,17 @@ int byte_Close(CapState *cs, rBuffer *buf, int count, const char *start) {
 int byte_Open(CapState *cs, rBuffer *buf, int count) {
   size_t s;
   UNUSED(count);
-  if (isfullcap(cs->cap) || !acceptable_capture(cs->cap->kind)) return ROSIE_OPEN_ERROR;
+  if (isfullcap(cs->cap) || !acceptable_capture(cs->cap->kind)) {
+       fprintf(stderr, "*** isfullcap-> %d, !acceptable_capture()->%d\n",
+	       isfullcap(cs->cap),
+	       !acceptable_capture(cs->cap->kind));
+       fprintf(stderr, "*** *s-> %p, idx-> %d, kind-> %d, siz-> %d\n",
+	       (const void *)cs->cap->s,
+	       cs->cap->idx,
+	       cs->cap->kind,
+	       cs->cap->siz);
+       return ROSIE_OPEN_ERROR;
+  }
   s = cs->cap->s - cs->s + 1;	/* 1-based start position */
   encode_pos(cs->L, s, 1, buf);
   encode_name(cs, buf, 0);
