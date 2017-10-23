@@ -60,10 +60,10 @@
 #define MAXRULES        1000
 #endif
 
-#define MAXCAPIDX USHRT_MAX
-typedef unsigned short capidx_t; 
-/* #define MAXCAPIDX 2,147,483,647 */
-/* typedef int capidx_t; */
+/* #define MAXCAPIDX USHRT_MAX */
+/* typedef unsigned short capidx_t;  */
+#define MAXCAPIDX 1000000 /* at most can be 2147483647 for signed int32 */
+typedef int32_t capidx_t; 
 
 
 /* initial size for capture's list */

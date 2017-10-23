@@ -168,11 +168,13 @@ static int addtoktable (lua_State *L, int idx) {
     lua_getuservalue(L, -1);  /* get ktable from pattern */
     n = lua_rawlen(L, -1);
     if (n >= MAXCAPIDX)
-      luaL_error(L, "too many Lua values in pattern");
-    lua_pushvalue(L, idx);  /* element to be added */
-    lua_rawseti(L, -2, ++n);
-    lua_pop(L, 1);  /* remove 'ktable' */
-    return n;
+      return luaL_error(L, "too many Lua values in pattern");
+    else {
+      lua_pushvalue(L, idx);  /* element to be added */
+      lua_rawseti(L, -2, ++n);
+      lua_pop(L, 1);  /* remove 'ktable' */
+      return n;
+    }
   }
 }
 
@@ -199,8 +201,8 @@ static int concattable (lua_State *L, int idx1, int idx2) {
   int i;
   int n1 = ktablelen(L, idx1);
   int n2 = ktablelen(L, idx2);
-  if (n1 + n2 > MAXCAPIDX)
-    luaL_error(L, "too many Lua values in pattern");
+  if ((n1 + n2) > MAXCAPIDX)
+    return luaL_error(L, "too many Lua values in pattern");
   if (n1 == 0) return 0;  /* nothing to correct */
   for (i = 1; i <= n1; i++) {
     lua_rawgeti(L, idx1, i);
