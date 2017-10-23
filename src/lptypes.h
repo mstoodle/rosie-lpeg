@@ -51,7 +51,7 @@
 
 /* default maximum size for call/backtrack stack */
 #if !defined(MAXBACK)
-#define MAXBACK         16768  /* (at most can be USHRT_MAX) Rosie */
+#define MAXBACK         9000  /* (at most can be USHRT_MAX) Rosie */
 #endif
 
 
