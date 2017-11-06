@@ -10,6 +10,8 @@
 #if !defined(rpeg_h)
 #define rpeg_h
 
+#include "lauxlib.h"
+#include "lualib.h"
 #include "rbuf.h"
 
 typedef uint8_t * byte_ptr;
