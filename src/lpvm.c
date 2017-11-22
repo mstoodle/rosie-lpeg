@@ -143,6 +143,9 @@ int removedyncap (lua_State *L, Capture *capture,
   return top - id + 1;  /* number of values removed */
 }
 
+double cumulativeInterpretedMatchTime = 0.0;
+double cumulativeTimeToMatch = 0.0;
+int numMeasuredMatches = 0;
 
 /* 
   Mark reports: 98% of bytecodes executed in the Rosie syslog pattern are these (in order): 
@@ -153,85 +156,8 @@ int removedyncap (lua_State *L, Capture *capture,
 
 /* Support for JIT compilation and profiling */
 
-/* compileMatcher is the entry point to the JIT compiler */
-extern int32_t compileMatcher(Pattern *p, Instruction *op, int ncode, uint8_t **entry);
-
-/* These two variables are used as a weak heuristic for reusing compiled code
-** but should not really be needed if compiled entry point stored in some object
-** associated with pattern.
-*/
-static Instruction *lastOp = NULL;
-
-/*
-** JIT compile pattern if possible, but do not try to match
-*/
-void compilePattern (struct Pattern *pattern, Instruction *op, int ncode) {
-  #if defined(DEBUG)
-    printf("pattern %p ncode %d\n", pattern, ncode);
-  #endif
-  uint8_t *entry=NULL;
-  if (ncode < 3000) { // arbitrary threshold for now
-    int32_t rc = compileMatcher(pattern, op, ncode, &entry);
-    if (rc != 0)
-      entry = NULL;
-  }
-
-  pattern->compiledEntry = entry;
-}
-
-static double cumulativeInterpretedMatchTime = 0.0;
-static double cumulativeTimeToMatch = 0.0;
-static int numMeasuredMatches = 0;
-
-/*
-** Match pattern using compiled entry point if available, otherwise interpret
-*/
-const char *matchWithCompiledPattern (lua_State *L, const char *o, const char *s, const char *e,
-                                      struct Pattern *pattern, Instruction *op, Capture *capture, int ptop, int ncode) {
-  struct timespec before, after;
-  char * r;
-
-  int rcBefore, rcAfter;
-
-  {
-    if (pattern->compiledEntry != NULL) {
-      lastOp = op;
-      typedef const char * (MatcherFunction)(lua_State *, const char *, const char *, const char *,
-                                             Capture *, int , int);
-      MatcherFunction *matcher = (MatcherFunction *) pattern->compiledEntry;
-      #if defined(DEBUG)
-        printf("Calling compiled entry for pattern %p\n", pattern);
-      #endif
-
-      rcBefore = clock_gettime(CLOCK_REALTIME, &before);
-      r = matcher(L, o, s, e, capture, ptop, ncode);
-      rcAfter = clock_gettime(CLOCK_REALTIME, &after);
-
-    } else {
-      #if defined(DEBUG)
-        printf("Interpreting (ncode %d)...\n", ncode);
-      #endif
-
-      /* if there isn't a compiled body, then interpret */
-      rcBefore = clock_gettime(CLOCK_REALTIME, &before);
-      r =  match(L, o, s, e, op, capture, ptop, ncode);
-      rcAfter = clock_gettime(CLOCK_REALTIME, &after);
-
-    }
-  }
-
-  if (rcBefore == -1 || rcAfter == -1) {
-    #if defined(MEASURE)
-      printf("Could not measure time to match\n");
-    #endif
-  } else {
-    double timeToMatch = (after.tv_sec - before.tv_sec) + (double)(after.tv_nsec - before.tv_nsec)/1000000000.0;
-    cumulativeTimeToMatch += timeToMatch;
-    numMeasuredMatches++;
-  }
-
-  return r;
-}
+extern void startJit(int sizeThreshold);
+extern void stopJit();
 
 void cleanup(void) {
 #if defined(MEASURE)
@@ -246,16 +172,7 @@ void cleanup(void) {
   else
     fprintf(stderr,"Total interpreted match time is %l3.0f milliseconds\n", cumulativeInterpretedMatchTime * 1000.0);
 #endif
-  shutdownJit();
-}
-
-/*
-** JIT if possible, else use standard opcode interpreter
-*/
-const char *compileAndMatch (lua_State *L, const char *o, const char *s, const char *e,
-                             struct Pattern *pattern, Instruction *op, Capture *capture, int ptop, int ncode) {
-  compilePattern(pattern, op, ncode);
-  return matchWithCompiledPattern(L, o, s, e, pattern, op, capture, ptop, ncode);
+  stopJit();
 }
 
 /*
@@ -419,6 +336,8 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
         continue;
       }
       case ICloseRunTime: {
+        /* note this code is also copied to lpjit.cpp */
+        /* any changes made here should also be reflected in helperCloseRuntime() in lpjit.cpp */
         CapState cs;
         int rem, res, n;
         int fr = lua_gettop(L) + 1;  /* stack index of first result */
@@ -489,39 +408,6 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
 }
 
 
-
-/* used by lpjit.cpp: most of the guts of ICloseRuntime */
-/* could be reused by match(), but cost of call may impact performance, so only use this copy for JIT to preserve baseline */
-Capture *
-helperCloseRuntime(lua_State *L, const char *o, const char *s, const char *e, Capture *capture, int captop, int capsize, int ndyncap, int ptop, int *results) {
-  CapState cs;
-  int rem, res, n;
-  int fr = lua_gettop(L) + 1; /* stack index of first result */
-  cs.s = o; cs.L = L; cs.ocap = capture; cs.ptop = ptop;
-  n = runtimecap(&cs, capture + captop, s, &rem);  /* call function */
-  captop -= n;  /* remove nested captures */
-  fr -= rem;  /* 'rem' items were popped from Lua stack */
-  res = resdyncaptures(L, fr, s - o, e - o);  /* get result */
-  if (res != -1) { /* not fail? */
-    s = o + res;  /* update current position */
-    n = lua_gettop(L) - fr + 1; /* number of new captures */
-    ndyncap += n - rem;  /* update number of dynamic captures */
-    if (n > 0) {  /* any new capture? */
-      if ((captop += n + 2) >= capsize) {
-        capture = doublecap(L, capture, captop, ptop);
-        capsize = 2 * captop;
-      }
-      /* add new captures to 'capture' list */
-      adddyncaptures(s, capture + captop - n - 2, n, fr); 
-    }
-  }
-  results[0] = res;
-  results[1] = ndyncap;
-  results[2] = captop;
-  results[3] = capsize;
-  
-  return capture;
-}
 
 /* }====================================================== */
 
