@@ -40,7 +40,7 @@ CC = gcc
 
 default:
 	@echo "Please specify a platform to build for.  Choices are: linux, macosx"
-	@echo "Please first install omr using omr_macosx or omr_linux"
+	@echo "Please first install omr using the omr target
 
 # For Linux
 linux:
@@ -70,14 +70,9 @@ lpvm.o: lpvm.c lpcap.h lptypes.h lpvm.h lpprint.h lptree.h
 rbuf.o: rbuf.c rbuf.h
 
 lpjit.o: lpjit.cpp lpjit.hpp lpvm.h lpcap.h $(JITBUILDER)
-	g++ -fno-rtti -fPIC -c -o $@ $(CWARNS) $(COPT) -I$(LUADIR) -I$(OMRDIR)/jitbuilder/release/include -I$(OMRDIR)/jitbuilder/release/include/compiler $<
+	g++ -fno-rtti -fPIC -c -o $@ $(CWARNS) $(COPT) -I$(LUADIR)/include -I$(OMRDIR)/jitbuilder/release/include -I$(OMRDIR)/jitbuilder/release/include/compiler $<
 
-omr_macosx:
-	cd $(ROOTDIR) && git clone -b all_fixes https://github.com/mstoodle/omr.git && \
-	cd omr && make -f run_configure.mk SPEC=osx OMRGLUE=./example/glue && \
-	cd jitbuilder && make
-
-omr_linux:
-	cd $(ROOTDIR) && git clone -b all_fixes https://github.com/mstoodle/omr.git && \
-	cd omr && make -f run_configure.mk SPEC=linux_x86-64 OMRGLUE=./example/glue && \
+omr:
+	cd $(ROOTDIR) && git clone https://github.com/mstoodle/omr.git && \
+	cd omr && ./configure
 	cd jitbuilder && make
