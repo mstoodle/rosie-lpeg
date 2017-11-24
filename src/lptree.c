@@ -17,6 +17,7 @@
 #include "lpcode.h"
 #include "lpprint.h"
 #include "lptree.h"
+#include "lpjit.h"
 
 #include "rpeg.h"
 
@@ -368,7 +369,7 @@ static TTree *newtree (lua_State *L, int len) {
   lua_pushvalue(L, -1);
   lua_setuservalue(L, -3);
   lua_setmetatable(L, -2);
-  p->code = NULL;  p->codesize = 0; p->compiledEntry = NULL;
+  p->code = NULL;  p->codesize = 0; p->matchesUntilCompile = JIT->jitCountThreshold; p->compiledEntry = NULL;
   return p->tree;
 }
 
@@ -1198,21 +1199,36 @@ static size_t initposition (lua_State *L, size_t len, int idx) {
 
 
 /*
-** Entry point to compile pattern and return (does not call match
+** attempt to load the JIT compiler library
+** JIT compilation of patterns can only happen if the JIT library is first loaded
+*/
+static int lp_loadJit(lua_State *L) {
+  const char *rosieLibpath = lua_tostring(L, 1);
+  int sizeLimit = (int) lua_tointeger(L, 2);
+  int countLimit = (int) lua_tointeger(L, 3);
+  printf("loadJit: sizeLimit %d countLimit %d\n", sizeLimit, countLimit);
+  int rc = loadJit(rosieLibpath, sizeLimit, countLimit);
+  lua_pushinteger(L, rc);
+  return 1;
+}
+
+/*
+** Entry point to compile pattern and return (does not call match)
 */
 static int lp_compile(lua_State *L) {
-  Pattern *p = (getpatt(L, 1, NULL), getpattern(L, 1));
-  Instruction *code = (p->code != NULL) ? p->code : prepcompile(L, p, 1);
-  int codesize = p->codesize;
-  compilePattern(p, code, codesize);
+  if (JIT->compilePattern) {
+    Pattern *p = (getpatt(L, 1, NULL), getpattern(L, 1));
+    Instruction *code = (p->code != NULL) ? p->code : prepcompile(L, p, 1);
+    int codesize = p->codesize;
+    JIT->compilePattern(p, code, codesize);
+  }
   return 0;
 }
 
 /*
-** match function that will try to JIT compile pattern first if compileFirst is non-zero
-** otherwise it will just try to match (using any available JIT compiled pattern)
+** Main match function
 */
-static int lp_match_internal (lua_State *L, int compileFirst) {
+static int lp_match(lua_State *L) {
   Capture capture[INITCAPSIZE];
   const char *r;
   size_t l;
@@ -1225,9 +1241,14 @@ static int lp_match_internal (lua_State *L, int compileFirst) {
   lua_pushnil(L);  /* initialize subscache */
   lua_pushlightuserdata(L, capture);  /* initialize caplistidx */
   lua_getuservalue(L, 1);  /* initialize penvidx */
-  if (compileFirst)
-    compilePattern(p, code, codesize);
-  r = matchWithCompiledPattern(L, s, s + i, s + l, p, code, capture, ptop, codesize);
+  if (JIT->matchWithCompiledPattern) { /* only if JIT is loaded */
+    r = JIT->matchWithCompiledPattern(L, s, s + i, s + l, p, code, capture, ptop, codesize);
+  }
+  else {
+    r = match(L, s, s+i, s+l, code, capture, ptop, codesize);
+  }
+  if (JIT->compilePattern && p->matchesUntilCompile >= 0)
+    p->matchesUntilCompile--;
   if (r == NULL) {
     lua_pushnil(L);
     return 1;
@@ -1242,19 +1263,13 @@ static int lp_match_internal (lua_State *L, int compileFirst) {
 */
 
 /*
-** Entry point to compile a pattern and then match
+** Entry point to JIT compile a pattern and then match
 */
 static int lp_compileAndMatch(lua_State *L) {
-  return lp_match_internal(L, 1);
+  lp_compile(L);
+  return lp_match(L);
 }
 
-/*
-** Main match function
-** Does not JIT compile pattern first but will use previously JIT compiled entry point if present
-*/
-static int lp_match(lua_State *L) {
-  return lp_match_internal(L, 0);
-}
 
 /* inline? */
 static int do_r_match (lua_State *L, int from_lua) {
@@ -1311,7 +1326,16 @@ static int do_r_match (lua_State *L, int from_lua) {
   lua_pushnil(L);  /* initialize subscache */
   lua_pushlightuserdata(L, capture);  /* initialize caplistidx */
   lua_getuservalue(L, 1);  /* initialize penvidx */
-  r = match(L, s, s + i, s + l, code, capture, ptop);
+
+  if (JIT->matchWithCompiledPattern) { /* only if JIT is loaded */
+    r = JIT->matchWithCompiledPattern(L, s, s + i, s + l, p, code, capture, ptop, p->codesize);
+  }
+  else {
+    r = match(L, s, s+i, s+l, code, capture, ptop, p->codesize);
+  }
+  if (JIT->compilePattern && p->matchesUntilCompile >= 0)
+    p->matchesUntilCompile--;
+
   tmatch = (lua_Integer) clock();
   if (r == NULL) {
     lua_pushboolean(L, 0);	/* false, i.e. no match */
@@ -1338,8 +1362,9 @@ int r_match_C (lua_State *L) {
   return do_r_match(L, 0);
 }
 
-static void lp_cleanup() {
+static int lp_cleanup(lua_State *L) {
   cleanup();
+  return 0;
 }
 
 /*
@@ -1419,6 +1444,7 @@ static struct luaL_Reg pattreg[] = {
   {"ptree", lp_printtree},
   {"pcode", lp_printcode},
   {"match", lp_match},
+  {"loadJit", lp_loadJit},
   {"compileAndMatch", lp_compileAndMatch},
   {"compile", lp_compile},
   {"cleanup", lp_cleanup},

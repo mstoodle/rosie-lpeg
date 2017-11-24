@@ -58,6 +58,7 @@ typedef struct TTree {
 typedef struct Pattern {
   union Instruction *code;
   int codesize;
+  int16_t matchesUntilCompile;
   uint8_t *compiledEntry;
   TTree tree[1];
 } Pattern;

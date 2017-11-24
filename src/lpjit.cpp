@@ -13,6 +13,7 @@
 
 #include <limits.h>
 #include <string.h>
+#include <dlfcn.h>
 
 #include "Jit.hpp"
 #include "ilgen/IlBuilder.hpp"
@@ -27,11 +28,34 @@ extern "C" {
 #include "lauxlib.h"
 #include "lptypes.h"
 #include "lptree.h"
+#include "lpjit.h"
 #if defined(DEBUG)
+#define LPEG_DEBUG
 #include "lpprint.h"
 #endif
 }
-#include "lpjit.hpp"
+
+// interpreter links to these
+extern "C" int startJit(const char *rosieLibpath, int countThreshold, int sizeThreshold);
+extern "C" void stopJit();
+extern "C" void compilePattern (struct Pattern *pattern, Instruction *op, int ncode);
+extern "C" const char *compileAndMatch (lua_State *L, const char *o, const char *s, const char *e,
+                                        struct Pattern *pattern, Instruction *op, Capture *capture, int ptop, int ncode);
+extern "C" const char *matchWithCompiledPattern (lua_State *L, const char *o, const char *s, const char *e,
+                                                 struct Pattern *pattern, Instruction *op, Capture *capture, int ptop, int ncode);
+
+// for linking to interpreter runtime in lpeg.so
+static Capture *(*doublecap)(lua_State *L, Capture *cap, int captop, int ptop) = NULL;
+static Stack *(*doublestack)(lua_State *L, Stack **stacklimit, int ptop) = NULL;
+static int (*resdyncaptures)(lua_State *L, int fr, int curr, int limit) = NULL;
+static void (*adddyncaptures)(const char *s, Capture *base, int n, int fd) = NULL;
+static int (*removedyncap)(lua_State *L, Capture *capture, int level, int last) = NULL;
+static const char *(*rawMatch)(lua_State *L, const char *o, const char *s, const char *e,
+                               Instruction *op, Capture *capture, int ptop, int ncode);
+#if defined(MEASURE)
+static double *cumulativeTimeToMatch = NULL;
+static int *numMeasuredMatches = NULL;
+#endif
 
 
 struct lua_State;
@@ -49,18 +73,14 @@ static const char *const opcode_names[] = {
    "fullcapture", "opencapture", "closecapture", "closeruntime"
 };
 
-extern "C" int resdyncaptures (lua_State *L, int fr, int curr, int limit);
-extern "C" void adddyncaptures (const char *s, Capture *base, int n, int fd);
-extern "C" int removedyncap (lua_State *L, Capture *capture, int level, int last);
-extern "C" Capture *doublecap (lua_State *L, Capture *cap, int captop, int ptop);
+int32_t compileMatcher(Pattern *p, Instruction *op, int ncode, uint8_t **entry);
 
 /*
 ** helperCloseRuntime is code copied from the ICloseRunTime bytecode handler in lpvm.c
 ** could have a single version, but the call from the interpreter may affect performance
 ** for now, have two copies: any changes to this code MUST also be made in lpvm.c
 */
-extern "C"
-Capture *
+static Capture *
 helperCloseRuntime(lua_State *L, const char *o, const char *s, const char *e, Capture *capture, int captop, int capsize, int ndyncap, int ptop, int *results) {
   CapState cs;
   int rem, res, n;
@@ -92,11 +112,11 @@ helperCloseRuntime(lua_State *L, const char *o, const char *s, const char *e, Ca
 }
 
 
-typedef struct Stack {
+typedef struct VMStack {
   TR::IlValue *s;
   TR::BytecodeBuilder *p;
   TR::IlValue *caplevel;
-} Stack;
+} VMStack;
 
 // Ideally, this class would leverage OMR::VirtualMachineOperandStack, but that class
 // currently cannot have multiple entries, whereas lpeg needs to have s, p, caplevel
@@ -105,12 +125,12 @@ typedef struct Stack {
 class LpState : public OMR::VirtualMachineState {
   public:
   LpState() : _stackTop(0), _stackMax(MAXBACK) {
-    _stack = new Stack[_stackMax];  // memory leak!
-    memset(_stack, 0, _stackMax * sizeof(Stack));
+    _stack = new VMStack[_stackMax];  // memory leak!
+    memset(_stack, 0, _stackMax * sizeof(VMStack));
   }
 
   LpState(LpState *other) : _stackTop(other->_stackTop), _stackMax(other->_stackMax) {
-    _stack = new Stack[_stackMax];  // memory leak!
+    _stack = new VMStack[_stackMax];  // memory leak!
     for (int32_t e=0;e < _stackTop;e++) {
       _stack[e].s = other->_stack[e].s;
       _stack[e].p = other->_stack[e].p;
@@ -137,11 +157,11 @@ class LpState : public OMR::VirtualMachineState {
   }
 
   void grow() {
-    int32_t origBytes = _stackMax * sizeof(Stack);
+    int32_t origBytes = _stackMax * sizeof(VMStack);
 
     int32_t newMax = _stackMax + (_stackMax >> 1);
-    int32_t newBytes = newMax * sizeof(Stack);
-    Stack * newStack = new Stack[newMax];   // memory leak!
+    int32_t newBytes = newMax * sizeof(VMStack);
+    VMStack * newStack = new VMStack[newMax];   // memory leak!
 
     memset(newStack, 0, newBytes);
     memcpy(newStack, _stack, origBytes);
@@ -150,13 +170,13 @@ class LpState : public OMR::VirtualMachineState {
     _stackMax = newMax;
   }
 
-  Stack *_stack;
+  VMStack *_stack;
   int32_t _stackTop;
   int32_t _stackMax;
 };
 
 
-// Stack accessor convenience macros:
+// VMStack accessor convenience macros:
 
 #define STACK(b)           (((LpState *)((b)->vmState()))->_stack)
 #define STACKTOP(b)        (((LpState *)((b)->vmState()))->_stackTop)
@@ -192,6 +212,66 @@ printBytecode(const Instruction *op, const Instruction *p, char *s, Capture *cap
 }
 #endif
 
+
+// LpMatcher compiles lpeg bytecodes to native code as a MethodBuilder
+
+class LpMatcher : public TR::MethodBuilder {
+  public:
+  LpMatcher(TR::TypeDictionary *types, Pattern *p, Instruction *op, int ncode);
+
+  void init();
+
+  bool buildIL();
+
+  protected:
+  TR::IlValue *TestChar(TR::IlBuilder *b, uint8_t *buf, TR::IlValue *c);
+  void FailBuilder(TR::BytecodeBuilder *failBuilder);
+  void incrementBy1(TR::IlBuilder *b, char *sym);
+
+  // bytecode handlers
+  void doEnd         (TR::BytecodeBuilder *b);
+  void doGiveUp      (TR::BytecodeBuilder *b);
+  void doRet         (TR::BytecodeBuilder *b);
+
+  void anyCommon     (TR::BytecodeBuilder *b, TR::BytecodeBuilder *targetBuilder);
+  void doAny         (TR::BytecodeBuilder *b, TR::BytecodeBuilder *fallThroughBuilder);
+  void doTestAny     (TR::BytecodeBuilder *b, TR::BytecodeBuilder *fallThroughBuilderftb, TR::BytecodeBuilder *targetBuilder);
+
+  void charCommon    (TR::BytecodeBuilder *b, char aux, TR::BytecodeBuilder *targetBuilder);
+  void doChar        (TR::BytecodeBuilder *b, char aux, TR::BytecodeBuilder *fallThroughBuilder);
+  void doTestChar    (TR::BytecodeBuilder *b, char aux, TR::BytecodeBuilder *fallThroughBuilder, TR::BytecodeBuilder *targetBuilder);
+
+  void setCommon     (TR::BytecodeBuilder *b, uint8_t * buf, TR::BytecodeBuilder *thenBuilder, TR::BytecodeBuilder *elseBuilder);
+  void doSet         (TR::BytecodeBuilder *b, uint8_t * buf, TR::BytecodeBuilder *targetBuilder);
+  void doTestSet     (TR::BytecodeBuilder *b, uint8_t * buf, TR::BytecodeBuilder *targetBuilder, TR::BytecodeBuilder *elseBuilder);
+
+  void doBehind      (TR::BytecodeBuilder *b, int n, TR::BytecodeBuilder *fallThroughBuilder);
+
+  void doSpan        (TR::BytecodeBuilder *b, uint8_t * buf, TR::BytecodeBuilder *fallThroughBuilder);
+
+  void pushCapture   (TR::BytecodeBuilder *b, unsigned short key, byte kind, TR::BytecodeBuilder *fallThroughBuilder);
+  void doOpenCapture (TR::BytecodeBuilder *b, unsigned short key, byte kind, TR::BytecodeBuilder *fallThroughBuilder);
+  void doFullCapture (TR::BytecodeBuilder *b, unsigned short key, byte kind, byte off, TR::BytecodeBuilder *fallThroughBuilder);
+  void doCloseCapture(TR::BytecodeBuilder *b, unsigned short key, byte kind, TR::BytecodeBuilder *fallThroughBuilder);
+
+  void doCloseRuntime(TR::BytecodeBuilder *b, TR::BytecodeBuilder *fallThroughBuilder);
+
+  int analyzeSetAsRange(uint8_t *buf, uint16_t *left, uint16_t *right);
+
+  Pattern *_p;
+  Instruction *_op;
+  int _ncode;
+
+  TR::IlType *Byte;
+  TR::IlType *Short;
+  TR::IlType *Int;
+  TR::IlType *pInt;
+  TR::IlType *pChar;
+  TR::IlType *pVoid;
+  TR::IlType *pInt8;
+  TR::IlType *CaptureType;
+  TR::IlType *pCaptureType;
+};
 
 void
 LpMatcher::doEnd(TR::BytecodeBuilder *b) {
@@ -481,7 +561,7 @@ void
 LpMatcher::pushCapture(TR::BytecodeBuilder *b, unsigned short key, byte kind, TR::BytecodeBuilder *fallThroughBuilder) {
   b->StoreIndirect("Capture", "idx",
   b->  Load("cap"),
-  b->  ConstInteger(Short, key));
+  b->  ConstInteger(Int32, key));
 
   b->StoreIndirect("Capture", "kind",
   b->  Load("cap"),
@@ -935,12 +1015,12 @@ LpMatcher::init() {
                  Int,
                  Int,
                  pInt);
-  DefineFunction("removedyncap", "lpvm.c", "135", (void *)&removedyncap, Int, 4,
+  DefineFunction("removedyncap", "lpvm.c", "135", (void *)removedyncap, Int, 4,
                  pVoid,
                  pCaptureType,
                  Int,
                  Int);
-  DefineFunction("doublecap", "lpvm.c", "50", (void *)&doublecap, pCaptureType, 4,
+  DefineFunction("doublecap", "lpvm.c", "50", (void *)doublecap, pCaptureType, 4,
                  pVoid,
                  pVoid,
                  Int,
@@ -966,55 +1046,75 @@ LpMatcher::incrementBy1(TR::IlBuilder *b, char *sym) {
 
 
 
-
 static int jitInitialized = 0;
-int jitCompileThreshold=3000; // default value; try to keep compiles at reasonable size/duration
+static int jitCompileSizeThreshold=3000; // default value; try to keep compiles at reasonable size/duration
+static int jitCompileCountThreshold=2;   // arbitrary number: should probably be a little higher
 
 extern "C"
-int startJit(int sizeThreshold) {
+int startJit(const char *libpath, int sizeThreshold, int countThreshold) {
   if (!jitInitialized) {
     jitInitialized = 1;
     bool rc = initializeJit();
     if (!rc) {
-      printf("JIT initialization failed\n");
-      return 0;
+      fprintf(stderr, "JIT initialization failed\n");
+      return -1;
     }
   }
-  jitCompileThreshold = sizeThreshold;
-  return 1;
+
+  static char lpeglib[1024] = {0};
+  sprintf(lpeglib, "%s/lpeg.so", libpath);
+  void *lpeg = dlopen(lpeglib, RTLD_LAZY);
+  if (lpeg != NULL) {
+    *(void**)&doublecap = dlsym(lpeg, "doublecap");
+    if (!doublecap) return -1;
+
+    *(void**)&doublestack = dlsym(lpeg, "doublestack");
+    if (!doublestack) return -1;
+
+    *(void**)&resdyncaptures = dlsym(lpeg, "resdyncaptures");
+    if (!resdyncaptures) return -1;
+
+    *(void**)&adddyncaptures = dlsym(lpeg, "adddyncaptures");
+    if (!adddyncaptures) return -1;
+
+    *(void**)&removedyncap = dlsym(lpeg, "removedyncap");
+    if (!removedyncap) return -1;
+
+    *(void**)&rawMatch = dlsym(lpeg, "match");
+    if (!rawMatch) return -1;
+
+    #if defined(MEASURE)
+      *(void**)&cumulativeMatchTime = dlsym(lpeg, "cumulativeMatchTime");
+      if (!cumulativeMatchTime) return -1;
+
+      *(void**)&numMeasuredMatches = dlsym(lpeg, "numMeasuredMatches");
+      if (!numMeasuredMatches) return -1;
+    #endif
+  }
+
+  jitCompileSizeThreshold = sizeThreshold;
+  jitCompileCountThreshold = countThreshold;
+  return 0;
 }
 
 
 int32_t
 compileMatcher(Pattern *p, Instruction *op, int ncode, uint8_t **entry) {
-
-  // should punt this to rosie itself but for now, this works
-  startJit(jitCompileThreshold);
-
   TR::TypeDictionary types;
 
   // the only special type needed is the Capture struct
   types.DEFINE_STRUCT(Capture);
   types.DEFINE_FIELD(Capture, s, types.toIlType<char *>());
-  types.DEFINE_FIELD(Capture, idx, types.toIlType<unsigned short>());
+  types.DEFINE_FIELD(Capture, idx, types.toIlType<int32_t>());
   types.DEFINE_FIELD(Capture, kind, types.toIlType<byte>());
   types.DEFINE_FIELD(Capture, siz, types.toIlType<byte>());
   types.CLOSE_STRUCT(Capture);
+ 
 
   // compile main entry point
   LpMatcher matcher(&types, p, op, ncode);
   int32_t rc = compileMethodBuilder(&matcher, entry);
   return rc;
-}
-
-/*
-** JIT if possible, else use standard opcode interpreter
-*/
-extern "C"
-const char *compileAndMatch (lua_State *L, const char *o, const char *s, const char *e,
-                             struct Pattern *pattern, Instruction *op, Capture *capture, int ptop, int ncode) {
-  compilePattern(pattern, op, ncode);
-  return matchWithCompiledPattern(L, o, s, e, pattern, op, capture, ptop, ncode);
 }
 
 /*
@@ -1026,13 +1126,14 @@ void compilePattern (struct Pattern *pattern, Instruction *op, int ncode) {
     printf("pattern %p ncode %d\n", pattern, ncode);
   #endif
   uint8_t *entry=NULL;
-  if (ncode <= jitCompileThreshold) { // try to keep compiles at reasonable size
+  if (ncode < jitCompileSizeThreshold) { // try to keep compiles at reasonable size
     int32_t rc = compileMatcher(pattern, op, ncode, &entry);
     if (rc != 0)
       entry = NULL;
   }
 
   pattern->compiledEntry = entry;
+  pattern->matchesUntilCompile = -1; // stop counting matches even if not successful
 }
 
 /* These two variables are used as a weak heuristic for reusing compiled code
@@ -1041,9 +1142,6 @@ void compilePattern (struct Pattern *pattern, Instruction *op, int ncode) {
 */
 static Instruction *lastOp = NULL;
 
-extern double cumulativeInterpretedMatchTime;
-extern double cumulativeTimeToMatch;
-extern int numMeasuredMatches;
 
 /*
 ** Match pattern using compiled entry point if available, otherwise interpret
@@ -1056,6 +1154,19 @@ const char *matchWithCompiledPattern (lua_State *L, const char *o, const char *s
     struct timespec before, after;
     int rcBefore, rcAfter;
   #endif
+
+  // determine if pattern needs to be compiled
+  #if defined(DEBUG)
+    printf("Pattern %p, c%d, e%p\n", pattern, pattern->matchesUntilCompile, pattern->compiledEntry);
+  #endif
+  if (pattern->compiledEntry == NULL) {
+    if (pattern->matchesUntilCompile == 0) {
+      compilePattern(pattern, op, ncode);
+    }
+    else if (pattern->matchesUntilCompile > 0) {
+      pattern->matchesUntilCompile--;
+    }
+  }
 
   if (pattern->compiledEntry != NULL) {
     lastOp = op;
@@ -1088,7 +1199,7 @@ const char *matchWithCompiledPattern (lua_State *L, const char *o, const char *s
       rcBefore = clock_gettime(CLOCK_REALTIME, &before);
     #endif
 
-    r =  (char *) match(L, o, s, e, op, capture, ptop, ncode);
+    r =  (char *) rawMatch(L, o, s, e, op, capture, ptop, ncode);
 
     #if defined(MEASURE)
       rcAfter = clock_gettime(CLOCK_REALTIME, &after);
@@ -1100,12 +1211,22 @@ const char *matchWithCompiledPattern (lua_State *L, const char *o, const char *s
       printf("Could not measure time to match\n");
     } else {
       double timeToMatch = (after.tv_sec - before.tv_sec) + (double)(after.tv_nsec - before.tv_nsec)/1000000000.0;
-      cumulativeTimeToMatch += timeToMatch;
-      numMeasuredMatches++;
+      *cumulativeTimeToMatch += timeToMatch;
+      (*numMeasuredMatches)++;
     }
   #endif
 
   return r;
+}
+
+/*
+** JIT if possible, else use standard opcode interpreter
+*/
+extern "C"
+const char *compileAndMatch (lua_State *L, const char *o, const char *s, const char *e,
+                             struct Pattern *pattern, Instruction *op, Capture *capture, int ptop, int ncode) {
+  compilePattern(pattern, op, ncode);
+  return matchWithCompiledPattern(L, o, s, e, pattern, op, capture, ptop, ncode);
 }
 
 extern "C"

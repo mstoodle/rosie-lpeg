@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
+#include <dlfcn.h>
 
 
 #include "lua.h"
@@ -15,6 +16,7 @@
 #include "lpcap.h"
 #include "lptypes.h"
 #include "lpvm.h"
+#include "lpjit.h"
 #include "lpprint.h"
 
 //#define MEASURE // record time before and after matches, accumulate across all match calls, report at exit
@@ -37,15 +39,14 @@ static const Instruction giveup = {{IGiveup, 0, 0}};
 */
 
 
-typedef struct Stack {
-  const char *s;  /* saved position (or NULL for calls) */
-  const Instruction *p;  /* next instruction */
-  int caplevel;
-} Stack;
-
-
 #define getstackbase(L, ptop)	((Stack *)lua_touserdata(L, stackidx(ptop)))
 
+
+Capture *doublecap (lua_State *L, Capture *cap, int captop, int ptop);
+Stack *doublestack (lua_State *L, Stack **stacklimit, int ptop);
+int resdyncaptures (lua_State *L, int fr, int curr, int limit);
+void adddyncaptures (const char *s, Capture *base, int n, int fd);
+int removedyncap (lua_State *L, Capture *capture, int level, int last);
 
 /*
 ** Double the size of the array of captures
@@ -144,8 +145,9 @@ int removedyncap (lua_State *L, Capture *capture,
 }
 
 #if defined(MEASURE)
+static double cumulativeInterpretedMatchTime = 0.0;
+
 // these are also referenced in lpjit.cpp
-double cumulativeInterpretedMatchTime = 0.0;
 double cumulativeTimeToMatch = 0.0;
 int numMeasuredMatches = 0;
 #endif
@@ -159,8 +161,51 @@ int numMeasuredMatches = 0;
 
 /* Support for JIT compilation and profiling */
 
-extern void startJit(int sizeThreshold);
-extern void stopJit();
+#define DEFAULT_SIZE_THRESHOLD  3000
+#define DEFAULT_COUNT_THRESHOLD 1
+
+static JitInterface noJit = { NULL, 0, -1, NULL, NULL, NULL, NULL };
+JitInterface *JIT = &noJit;
+
+int loadJit(const char *libpath, int jitSizeThreshold, int jitCountThreshold) {
+  static JitInterface loadedJit = { NULL, DEFAULT_SIZE_THRESHOLD, DEFAULT_COUNT_THRESHOLD, NULL, NULL, NULL, NULL };
+
+  static char jitlib[1024] = {0};
+  sprintf(jitlib, "%s/lpjit.so", libpath);
+  void *lib = dlopen(jitlib, RTLD_LAZY);
+  if (lib != NULL) {
+    loadedJit.lib = lib;
+    *(void**)(&loadedJit.startJit) =                 dlsym(loadedJit.lib, "startJit");
+    *(void**)(&loadedJit.stopJit) =                  dlsym(loadedJit.lib, "stopJit");
+    *(void**)(&loadedJit.compilePattern) =           dlsym(loadedJit.lib, "compilePattern");
+    *(void**)(&loadedJit.matchWithCompiledPattern) = dlsym(loadedJit.lib, "matchWithCompiledPattern");
+
+    int rc = loadedJit.startJit(libpath, jitSizeThreshold, jitCountThreshold);
+    if (rc == 0) {
+      loadedJit.jitSizeThreshold = jitSizeThreshold;
+      loadedJit.jitCountThreshold = jitCountThreshold;
+      JIT = &loadedJit;
+      return 0;
+    }
+    else {
+      JIT = &noJit;
+      return rc;
+    }
+  }
+  else
+    printf ("Could not load lpjit.so: dlerror %s\n", dlerror());
+
+  return -1;
+}
+
+void unloadJit(void)
+  {
+  if (JIT->lib) {
+    dlclose(JIT->lib);
+
+    JIT = &noJit;
+  }
+}
 
 void cleanup(void) {
 #if defined(MEASURE)
@@ -175,7 +220,11 @@ void cleanup(void) {
   else
     fprintf(stderr,"Total interpreted match time is %l3.0f milliseconds\n", cumulativeInterpretedMatchTime * 1000.0);
 #endif
-  stopJit();
+  if (JIT->stopJit)
+    {
+    JIT->stopJit();
+    unloadJit();
+    }
 }
 
 /*
