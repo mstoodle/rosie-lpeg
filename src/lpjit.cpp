@@ -1136,12 +1136,6 @@ void compilePattern (struct Pattern *pattern, Instruction *op, int ncode) {
   pattern->matchesUntilCompile = -1; // stop counting matches even if not successful
 }
 
-/* These two variables are used as a weak heuristic for reusing compiled code
-** but should not really be needed if compiled entry point stored in some object
-** associated with pattern.
-*/
-static Instruction *lastOp = NULL;
-
 
 /*
 ** Match pattern using compiled entry point if available, otherwise interpret
@@ -1169,7 +1163,6 @@ const char *matchWithCompiledPattern (lua_State *L, const char *o, const char *s
   }
 
   if (pattern->compiledEntry != NULL) {
-    lastOp = op;
     typedef const char * (MatcherFunction)(lua_State *, const char *, const char *, const char *,
                                            Capture *, int , int);
     MatcherFunction *matcher = (MatcherFunction *) pattern->compiledEntry;
