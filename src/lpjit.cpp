@@ -1050,45 +1050,60 @@ extern int numMeasuredMatches;
 */
 const char *matchWithCompiledPattern (lua_State *L, const char *o, const char *s, const char *e,
                                       struct Pattern *pattern, Instruction *op, Capture *capture, int ptop, int ncode) {
-  struct timespec before, after;
   char * r;
 
-  int rcBefore, rcAfter;
+  #if defined(MEASURE)
+    struct timespec before, after;
+    int rcBefore, rcAfter;
+  #endif
 
   if (pattern->compiledEntry != NULL) {
     lastOp = op;
     typedef const char * (MatcherFunction)(lua_State *, const char *, const char *, const char *,
                                            Capture *, int , int);
     MatcherFunction *matcher = (MatcherFunction *) pattern->compiledEntry;
+
     #if defined(DEBUG)
       printf("Calling compiled entry for pattern %p\n", pattern);
     #endif
 
-    rcBefore = clock_gettime(CLOCK_REALTIME, &before);
+    #if defined(MEASURE)
+      rcBefore = clock_gettime(CLOCK_REALTIME, &before);
+    #endif
+
     r = (char *) matcher(L, o, s, e, capture, ptop, ncode);
-    rcAfter = clock_gettime(CLOCK_REALTIME, &after);
+
+    #if defined(MEASURE)
+      rcAfter = clock_gettime(CLOCK_REALTIME, &after);
+    #endif
 
   } else {
+
     #if defined(DEBUG)
       printf("Interpreting (ncode %d)...\n", ncode);
     #endif
 
-    /* if there isn't a compiled body, then interpret */
-    rcBefore = clock_gettime(CLOCK_REALTIME, &before);
-    r =  (char *) match(L, o, s, e, op, capture, ptop, ncode);
-    rcAfter = clock_gettime(CLOCK_REALTIME, &after);
-
-  }
-
-  if (rcBefore == -1 || rcAfter == -1) {
     #if defined(MEASURE)
-      printf("Could not measure time to match\n");
+      /* if there isn't a compiled body, then interpret */
+      rcBefore = clock_gettime(CLOCK_REALTIME, &before);
     #endif
-  } else {
-    double timeToMatch = (after.tv_sec - before.tv_sec) + (double)(after.tv_nsec - before.tv_nsec)/1000000000.0;
-    cumulativeTimeToMatch += timeToMatch;
-    numMeasuredMatches++;
+
+    r =  (char *) match(L, o, s, e, op, capture, ptop, ncode);
+
+    #if defined(MEASURE)
+      rcAfter = clock_gettime(CLOCK_REALTIME, &after);
+    #endif
   }
+
+  #if defined(MEASURE)
+    if (rcBefore == -1 || rcAfter == -1) {
+      printf("Could not measure time to match\n");
+    } else {
+      double timeToMatch = (after.tv_sec - before.tv_sec) + (double)(after.tv_nsec - before.tv_nsec)/1000000000.0;
+      cumulativeTimeToMatch += timeToMatch;
+      numMeasuredMatches++;
+    }
+  #endif
 
   return r;
 }

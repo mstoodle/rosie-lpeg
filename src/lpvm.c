@@ -17,8 +17,8 @@
 #include "lpvm.h"
 #include "lpprint.h"
 
-//#define MEASURE
-//#define DEBUG
+//#define MEASURE // record time before and after matches, accumulate across all match calls, report at exit
+//#define DEBUG   // detailed info about interpreter execution
 
 /* initial size for call/backtrack stack */
 #if !defined(INITBACK)
@@ -143,9 +143,12 @@ int removedyncap (lua_State *L, Capture *capture,
   return top - id + 1;  /* number of values removed */
 }
 
+#if defined(MEASURE)
+// these are also referenced in lpjit.cpp
 double cumulativeInterpretedMatchTime = 0.0;
 double cumulativeTimeToMatch = 0.0;
 int numMeasuredMatches = 0;
+#endif
 
 /* 
   Mark reports: 98% of bytecodes executed in the Rosie syslog pattern are these (in order): 
@@ -188,8 +191,10 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
   int ndyncap = 0;  /* number of dynamic captures (in Lua stack) */
   const Instruction *p = op;  /* current instruction */
 
+#if defined(MEASURE)
   struct timespec before, after;
   int rcBefore = clock_gettime(CLOCK_REALTIME, &before);
+#endif
 
   lua_pushlightuserdata(L, stackbase);
 
@@ -211,11 +216,13 @@ const char *match (lua_State *L, const char *o, const char *s, const char *e,
         capture[captop].kind = Cclose;
         capture[captop].s = NULL;
 
+#if defined(MEASURE)
         int rcAfter = clock_gettime(CLOCK_REALTIME, &after);
         if (rcBefore != -1 && rcAfter != -1) {
           double timeToMatch = (after.tv_sec - before.tv_sec) + (double)(after.tv_nsec - before.tv_nsec)/1000000000.0;
           cumulativeInterpretedMatchTime += timeToMatch;
         }
+#endif
 
         return s;
       }
